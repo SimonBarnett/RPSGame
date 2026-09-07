@@ -1,0 +1,247 @@
+{
+  "flock_sep": {
+    "math": "boids",
+    "fn": "SwarmIntelligence.compute",
+    "knob": "sep_distance",
+    "goal": "individual",
+    "desc": "don't pile on allies"
+  },
+  "flock_coh": {
+    "math": "boids",
+    "fn": "SwarmIntelligence.compute",
+    "knob": "cohesion_weight",
+    "goal": "team",
+    "desc": "stay with the pack"
+  },
+  "flock_ali": {
+    "math": "boids",
+    "fn": "SwarmIntelligence.compute",
+    "knob": "speed_match_weight",
+    "goal": "team",
+    "desc": "match pack heading"
+  },
+  "fear_flee": {
+    "math": "boids",
+    "fn": "SwarmIntelligence.compute",
+    "knob": "escape_bonus",
+    "goal": "individual",
+    "desc": "steer off predators"
+  },
+  "prey_pull": {
+    "math": "boids",
+    "fn": "SwarmIntelligence.compute",
+    "knob": "near_target_aggro",
+    "goal": "individual",
+    "desc": "steer onto prey"
+  },
+  "prey_repel": {
+    "math": "boids",
+    "fn": "SwarmIntelligence.compute",
+    "knob": "prey_repel_weight",
+    "goal": "team",
+    "desc": "soft radial away from last 2-3 prey while predators live"
+  },
+  "orbit_herd": {
+    "math": "boids",
+    "fn": "SwarmIntelligence.compute",
+    "knob": "prey_orbit_weight",
+    "goal": "team",
+    "desc": "tangential herd around last meals; contact still converts"
+  },
+  "voronoi_split": {
+    "math": "voronoi",
+    "fn": "VoronoiEndgame.assign",
+    "knob": "voronoi_weight",
+    "goal": "team",
+    "desc": "one hunter per prey cell"
+  },
+  "pincer_flank": {
+    "math": "steer",
+    "fn": "Steer.pincer_heading",
+    "knob": "pincer_weight",
+    "goal": "team",
+    "desc": "left/right offset pursue"
+  },
+  "wall_slide": {
+    "math": "steer",
+    "fn": "Steer._steer_around_walls",
+    "knob": "avoid_weight",
+    "goal": "individual",
+    "desc": "don't eat the wall"
+  },
+  "fort_slide": {
+    "math": "steer",
+    "fn": "Steer._steer_around_forts",
+    "knob": "avoid_weight",
+    "goal": "individual",
+    "desc": "don't eat a fort"
+  },
+  "fort_cover": {
+    "math": "cover",
+    "fn": "FortLOS.cover_heading",
+    "knob": "fort_cover_weight",
+    "goal": "individual",
+    "desc": "put fort between self and fear"
+  },
+  "fort_ambush": {
+    "math": "cover",
+    "fn": "FortLOS.best_cover_fort",
+    "knob": "fort_ambush_bonus",
+    "goal": "individual",
+    "desc": "hold then spring"
+  },
+  "hide_in_prey": {
+    "math": "sectors",
+    "fn": "SectorLogic.orient",
+    "knob": "hide_among_prey_weight",
+    "goal": "individual",
+    "desc": "blend into prey flock"
+  },
+  "focus_fire": {
+    "math": "sectors",
+    "fn": "SectorLogic.chase_heading",
+    "knob": "focus_fire_mult",
+    "goal": "team",
+    "desc": "shared alert target"
+  },
+  "raid_isolated": {
+    "math": "sectors",
+    "fn": "SectorLogic.orient",
+    "knob": "small_raid_bonus",
+    "goal": "individual",
+    "desc": "pick off stragglers"
+  },
+  "no_corner_herd": {
+    "math": "steer",
+    "fn": "Steer._steer_around_walls",
+    "knob": "no_corner_herd",
+    "goal": "team",
+    "desc": "don't pin last prey in a corner"
+  },
+  "near_wipe_sep": {
+    "math": "boids",
+    "fn": "SwarmIntelligence.compute",
+    "knob": "near_wipe_sep_mult",
+    "goal": "individual",
+    "desc": "explode when almost dead"
+  },
+  "intercept": {
+    "math": "steer",
+    "fn": "Steer._predicted_pos",
+    "knob": "predict_lookahead",
+    "goal": "individual",
+    "desc": "aim ahead of moving prey"
+  },
+  "role_screen": {
+    "math": "roles",
+    "fn": "Roles.heading",
+    "knob": "escape_bonus",
+    "goal": "team",
+    "desc": "SCREEN units face fear"
+  },
+  "form_wedge": {
+    "math": "form",
+    "fn": "Formation.slot_heading",
+    "knob": "cohesion_weight",
+    "goal": "team",
+    "desc": "hold a wedge"
+  },
+  "orbit_ring": {
+    "math": "orbit",
+    "fn": "Orbit.heading",
+    "knob": "offset_pursue_dist",
+    "goal": "individual",
+    "desc": "tangent stand-off"
+  },
+  "eta_gate": {
+    "math": "time",
+    "fn": "TimeTo.heading",
+    "knob": "predict_lookahead",
+    "goal": "individual",
+    "desc": "hunt only if convert-before-fear"
+  },
+  "flow_field": {
+    "math": "flow",
+    "fn": "FlowField.heading",
+    "knob": "near_target_aggro",
+    "goal": "individual",
+    "desc": "potential-field heading"
+  },
+  "give_ground": {
+    "math": "pressure",
+    "fn": "PressureField.heading",
+    "knob": "pressure_own",
+    "goal": "team",
+    "desc": "slide off own pack density"
+  },
+  "fear_blob": {
+    "math": "pressure",
+    "fn": "PressureField.heading",
+    "knob": "pressure_fear",
+    "goal": "individual",
+    "desc": "slide off predator blobs"
+  },
+  "sparse_prey": {
+    "math": "pressure",
+    "fn": "PressureField.heading",
+    "knob": "pressure_prey",
+    "goal": "individual",
+    "desc": "prefer low-density prey"
+  },
+  "close_melee": {
+    "math": "hash",
+    "fn": "SpatialHash.query",
+    "knob": "sep_distance",
+    "goal": "individual",
+    "desc": "act on hash-local neighbours only"
+  },
+  "bounce_reset": {
+    "math": "phys",
+    "fn": "bounce_walls",
+    "knob": "avoid_weight",
+    "goal": "individual",
+    "desc": "use wall bounce as an evade heading reset"
+  },
+  "lane_sweep": {
+    "math": "lanes",
+    "fn": "Lanes.heading",
+    "knob": "lane_count",
+    "goal": "team",
+    "desc": "each hunter owns a parallel corridor"
+  },
+  "clock_eta": {
+    "math": "time",
+    "fn": "TimeTo.heading",
+    "knob": "predict_lookahead",
+    "goal": "individual",
+    "desc": "steer by time-to-contact, not raw bearing"
+  },
+  "mark_role": {
+    "math": "roles",
+    "fn": "Roles.heading",
+    "knob": "focus_fire_mult",
+    "goal": "team",
+    "desc": "1-1 mark so two units do not chase the same prey"
+  },
+  "lead_intercept": {
+    "math": "intercept",
+    "fn": "Intercept.heading",
+    "knob": "predict_lookahead",
+    "goal": "individual",
+    "desc": "chase where prey will be, not where it is"
+  },
+  "chord_cut": {
+    "math": "intercept",
+    "fn": "Intercept.chord_point",
+    "knob": "predict_lookahead",
+    "goal": "individual",
+    "desc": "cut the chord of an orbiting prey"
+  },
+  "desync_fan": {
+    "math": "desync",
+    "fn": "Desync.heading",
+    "knob": "desync_span",
+    "goal": "team",
+    "desc": "fan headings so mirrored cards do not clone one path"
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "boids": {
+    "file": "maths/boids.py",
+    "api": [
+      "SwarmIntelligence.compute",
+      "SwarmIntelligence.desired_heading",
+      "SwarmIntelligence.blend_headings"
+    ],
+    "use": "separation, cohesion, alignment, fear/prey forces"
+  },
+  "voronoi": {
+    "file": "maths/voronoi.py",
+    "api": [
+      "VoronoiEndgame.assign",
+      "VoronoiEndgame.stats"
+    ],
+    "use": "split hunters across remaining prey (endgame)"
+  },
+  "steer": {
+    "file": "maths/ping.py",
+    "api": [
+      "Steer.pincer_heading",
+      "Steer.apply_wall_bias",
+      "Steer.apply_fort_bias",
+      "Steer.adaptive_heading_damp",
+      "Steer._predicted_pos",
+      "Steer._steer_around_forts",
+      "Steer._steer_around_walls"
+    ],
+    "use": "wall/fort slide, heading damp, pincer offset, intercept"
+  },
+  "sectors": {
+    "file": "maths/ping.py",
+    "api": [
+      "SectorLogic.scan",
+      "SectorLogic.orient",
+      "SectorLogic.chase_heading",
+      "SectorLogic.bearing"
+    ],
+    "use": "360\u00b0 fear/prey contacts \u2192 heading"
+  },
+  "cover": {
+    "file": "arena/fort.py",
+    "api": [
+      "FortLOS.cover_heading",
+      "FortLOS.best_cover_fort",
+      "FortLOS.occludes",
+      "FortLOS.clear"
+    ],
+    "use": "hide behind forts, ambush hold/spring"
+  },
+  "hash": {
+    "file": "maths/phys.py",
+    "api": [
+      "SpatialHash.query"
+    ],
+    "use": "cheap local neighbourhood"
+  },
+  "phys": {
+    "file": "maths/phys.py",
+    "api": [
+      "integrate",
+      "bounce_walls",
+      "collide_pair",
+      "maxspeed"
+    ],
+    "use": "immutable motion / collisions"
+  },
+  "flow": {
+    "file": "maths/flow.py",
+    "api": [
+      "FlowField.heading",
+      "FlowField.force"
+    ],
+    "use": "potential field: attract prey, repel fear, ridge off walls/forts"
+  },
+  "roles": {
+    "file": "maths/roles.py",
+    "api": [
+      "Roles.assign",
+      "Roles.heading",
+      "Roles.assign_team"
+    ],
+    "use": "SCREEN / BAIT / STRIKE / ESCORT from local fear vs prey"
+  },
+  "form": {
+    "file": "maths/form.py",
+    "api": [
+      "Formation.slot_heading",
+      "Formation.slot_point"
+    ],
+    "use": "wedge / line / ring slots about the pack centroid"
+  },
+  "time": {
+    "file": "maths/time.py",
+    "api": [
+      "TimeTo.eta",
+      "TimeTo.closing_speed",
+      "TimeTo.can_convert_before_fear",
+      "TimeTo.heading"
+    ],
+    "use": "ETA and convert-before-fear gate"
+  },
+  "orbit": {
+    "file": "maths/orbit.py",
+    "api": [
+      "Orbit.heading"
+    ],
+    "use": "tangent stand-off around prey or a fort"
+  },
+  "pressure": {
+    "file": "maths/pressure.py",
+    "api": [
+      "PressureField.heading",
+      "PressureField.force",
+      "PressureField.density_at",
+      "PressureField.gradient"
+    ],
+    "use": "local friend/fear/prey density; give ground, slide off blobs, hunt sparse prey"
+  },
+  "lanes": {
+    "file": "maths/lanes.py",
+    "api": [
+      "Lanes.heading",
+      "Lanes.lane_index"
+    ],
+    "use": "split hunters into parallel corridors so CLEAR_HUNT does not stack one gap"
+  },
+  "intercept": {
+    "file": "maths/intercept.py",
+    "api": [
+      "Intercept.heading",
+      "Intercept.lead_point",
+      "Intercept.chord_point"
+    ],
+    "use": "lead pursuit and chord-cut of a circling target (anti-orbit)"
+  },
+  "desync": {
+    "file": "maths/desync.py",
+    "api": [
+      "Desync.heading",
+      "Desync.offset"
+    ],
+    "use": "stable per-unit heading fan so mirrored cards do not share one path"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "id": "LAST_PREY_CARE",
+  "title": "Last prey care",
+  "mode": "DEFEND",
+  "desc": "3/2/1 prey left and our predator lives: flee fear and peel off the meals. Convert is legal; touching them is a losing move.",
+  "when": {
+    "states": ["LAST_PREY_RISK"],
+    "priority": 92
+  },
+  "tactics": [
+    "prey_repel",
+    "orbit_herd",
+    "fear_flee",
+    "fort_cover",
+    "no_corner_herd",
+    "flock_sep",
+    "give_ground"
+  ],
+  "math": ["boids", "cover", "steer", "sectors"],
+  "movement": [
+    {"fn": "boids.desired_heading", "blend": 0.85},
+    {"fn": "cover.cover_heading", "blend": 0.45},
+    {"fn": "steer.apply_wall_bias", "blend": 0.25}
+  ],
+  "switch": {"hold_frames": 10, "margin": 1.2},
+  "tunables": {
+    "switch.hold_frames": [4, 24, 1],
+    "switch.margin": [0.5, 2.0, 0.05],
+    "escape_bonus": [0.6, 2.2, 0.04],
+    "fear_close_mult": [1.2, 4.0, 0.05],
+    "prey_reserve_penalty": [0.0, 1.0, 0.05],
+    "fort_cover_weight": [0.4, 1.8, 0.05],
+    "sep_distance": [3.0, 10.0, 0.1],
+    "prey_orbit_weight": [0.4, 2.0, 0.05],
+    "prey_repel_weight": [0.2, 1.6, 0.05]
+  },
+  "bounds": {
+    "escape_bonus": [0.6, 2.2, 0.04],
+    "fear_close_mult": [1.2, 4.0, 0.05],
+    "sep_distance": [3.0, 10.0, 0.1]
+  },
+  "base": {
+    "speed_base": 1.3,
+    "turn_base": 14.0,
+    "size": 20
+  }
+}

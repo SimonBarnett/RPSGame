@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="theme-color" content="#070a14"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="RPS"/>
+  <link rel="manifest" href="./manifest.webmanifest"/>
+  <link rel="icon" href="./icon-192.png"/>
+  <link rel="apple-touch-icon" href="./icon-192.png"/>
+  <title>Rock Paper Scissors</title>
+  <style>
+    html, body, #rps { margin:0; width:100%; height:100%; background:#070a14; }
+    html, body { height:100dvh; overflow:hidden; }
+    #rps-err { display:none; position:fixed; inset:16px auto auto 16px; max-width:520px;
+      background:#3a1020; color:#ffd6de; padding:12px 14px; border-radius:10px;
+      font:14px/1.4 ui-sans-serif, system-ui; z-index:9; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="rps"></div>
+  <div id="rps-err"></div>
+  <script src="./rps.js" onerror="document.getElementById('rps-err').style.display='block';document.getElementById('rps-err').textContent='rps.js failed to load. Put rps.js next to this HTML.';"></script>
+  <script>
+    function showErr(e) {
+      var el = document.getElementById("rps-err");
+      el.style.display = "block";
+      el.textContent = (e && e.stack) ? e.stack : String(e);
+    }
+    try {
+      if (!window.RPS || !RPS.mount) throw new Error("RPS not defined — rps.js did not run");
+      var p = RPS.mount("#rps");
+      if (p && p.catch) p.catch(showErr);
+    } catch (e) { showErr(e); }
+    if (location.protocol !== "file:" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(function(){});
+    }
+  </script>
+</body>
+</html>

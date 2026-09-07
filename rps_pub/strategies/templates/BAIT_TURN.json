@@ -1,0 +1,176 @@
+{
+  "id": "BAIT_TURN",
+  "title": "Bait turn",
+  "mode": "HUNT",
+  "desc": "Assign one BAIT to peel around a fort; STRIKE hits the opened flank.",
+  "when": {
+    "states": [
+      "CONTESTED",
+      "LAST_PREY_RISK"
+    ],
+    "priority": 52
+  },
+  "tactics": [
+    "role_screen",
+    "raid_isolated",
+    "fort_slide",
+    "pincer_flank",
+    "focus_fire",
+    "intercept"
+  ],
+  "math": [
+    "roles",
+    "cover",
+    "steer",
+    "form"
+  ],
+  "movement": [
+    {
+      "fn": "roles.assign"
+    },
+    {
+      "fn": "roles.heading",
+      "blend": 0.5
+    },
+    {
+      "fn": "steer._steer_around_forts",
+      "blend": 0.35
+    },
+    {
+      "fn": "steer.pincer_heading",
+      "blend": 0.3,
+      "when": "chase"
+    }
+  ],
+  "switch": {
+    "hold_frames": 6,
+    "margin": 1.08
+  },
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      24,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "small_raid_bonus": [
+      1.1,
+      2.3,
+      0.05
+    ],
+    "avoid_weight": [
+      0.7,
+      2.5,
+      0.05
+    ],
+    "pincer_weight": [
+      0.4,
+      1.7,
+      0.04
+    ],
+    "focus_fire_mult": [
+      1.0,
+      2.3,
+      0.04
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "movement[0].weight": [
+      0.0,
+      2.0,
+      0.05
+    ],
+    "movement[1].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[2].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[3].blend": [
+      0.0,
+      1.0,
+      0.05
+    ]
+  },
+  "bounds": {
+    "small_raid_bonus": [
+      1.1,
+      2.3,
+      0.05
+    ],
+    "avoid_weight": [
+      0.7,
+      2.5,
+      0.05
+    ],
+    "pincer_weight": [
+      0.4,
+      1.7,
+      0.04
+    ],
+    "focus_fire_mult": [
+      1.0,
+      2.3,
+      0.04
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "speed_base": [
+      0.9,
+      1.8,
+      0.02
+    ],
+    "turn_base": [
+      8.0,
+      22.0,
+      0.2
+    ],
+    "size": [
+      16.0,
+      24.0,
+      0.5
+    ],
+    "late_speed_mult": [
+      1.08,
+      1.35,
+      0.02
+    ],
+    "late_turn_mult": [
+      1.08,
+      1.28,
+      0.02
+    ],
+    "late_count_threshold": [
+      1,
+      3,
+      1
+    ]
+  },
+  "base": {
+    "speed_base": 1.3,
+    "turn_base": 13.0,
+    "size": 20,
+    "late_speed_mult": 1.22,
+    "late_turn_mult": 1.16,
+    "late_count_threshold": 2
+  }
+}

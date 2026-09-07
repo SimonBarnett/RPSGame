@@ -1,0 +1,94 @@
+{
+  "id": "WALL_CUTOFF",
+  "title": "Wall cutoff",
+  "mode": "HUNT",
+  "desc": "CLEAR_HUNT: intercept prey sliding a wall instead of chasing their current heading.",
+  "when": {
+    "states": [
+      "CLEAR_HUNT"
+    ],
+    "priority": 96
+  },
+  "tactics": [
+    "voronoi_split",
+    "intercept",
+    "wall_slide",
+    "flock_sep",
+    "prey_pull",
+    "sparse_prey"
+  ],
+  "math": [
+    "voronoi",
+    "intercept",
+    "steer",
+    "sectors",
+    "time"
+  ],
+  "movement": [
+    {
+      "fn": "voronoi.assign",
+      "when": "CLEAR_HUNT"
+    },
+    {
+      "fn": "intercept.heading",
+      "blend": 0.7,
+      "mode": "lead"
+    },
+    {
+      "fn": "sectors.chase_heading",
+      "weight": 1.2
+    },
+    {
+      "fn": "boids.desired_heading",
+      "blend": 0.1
+    }
+  ],
+  "switch": {
+    "hold_frames": 8,
+    "margin": 1.1
+  },
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      16,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "sep_distance": [
+      5.0,
+      8.5,
+      0.15
+    ],
+    "near_target_aggro": [
+      1.6,
+      3.2,
+      0.05
+    ],
+    "predict_lookahead": [
+      10.0,
+      22.0,
+      0.5
+    ]
+  },
+  "weights": {
+    "sep_distance": 6.5,
+    "near_target_aggro": 2.6,
+    "cohesion_weight": 0.0,
+    "pack_hunt_mult": 0.25,
+    "predict_lookahead": 16.0
+  },
+  "stats": {
+    "ticks": 0,
+    "wins": 0,
+    "games": 0
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "cells": [
+    {
+      "state": "CLEAR_HUNT",
+      "team_bucket": 8,
+      "type": "PAPER",
+      "sid": "LANE_SWEEP",
+      "fitness": 1.0075,
+      "visits": 2
+    },
+    {
+      "state": "CLEAR_HUNT",
+      "team_bucket": 8,
+      "type": "ROCK",
+      "sid": "CLEAR_SPLIT",
+      "fitness": 0.8465,
+      "visits": 1
+    },
+    {
+      "state": "CLEAR_HUNT",
+      "team_bucket": 8,
+      "type": "SCISSORS",
+      "sid": "LANE_SWEEP",
+      "fitness": 1.248,
+      "visits": 2
+    },
+    {
+      "state": "CONTESTED",
+      "team_bucket": 8,
+      "type": "PAPER",
+      "sid": "PACK_HUNT",
+      "fitness": 0.2191,
+      "visits": 1
+    },
+    {
+      "state": "CONTESTED",
+      "team_bucket": 8,
+      "type": "ROCK",
+      "sid": "PACK_HUNT",
+      "fitness": 0.167,
+      "visits": 1
+    },
+    {
+      "state": "CONTESTED",
+      "team_bucket": 8,
+      "type": "SCISSORS",
+      "sid": "PACK_HUNT",
+      "fitness": 0.3587,
+      "visits": 5
+    },
+    {
+      "state": "LAST_MAN",
+      "team_bucket": 8,
+      "type": "PAPER",
+      "sid": "LAST_MAN_RUN",
+      "fitness": 0.4169,
+      "visits": 1
+    },
+    {
+      "state": "LAST_MAN",
+      "team_bucket": 8,
+      "type": "ROCK",
+      "sid": "LAST_MAN_RUN",
+      "fitness": 0.1733,
+      "visits": 1
+    },
+    {
+      "state": "LAST_MAN",
+      "team_bucket": 8,
+      "type": "SCISSORS",
+      "sid": "LAST_MAN_RUN",
+      "fitness": 0.4306,
+      "visits": 1
+    },
+    {
+      "state": "LAST_PREY_RISK",
+      "team_bucket": 8,
+      "type": "PAPER",
+      "sid": "DELAY_FEAST",
+      "fitness": 0.408,
+      "visits": 1
+    },
+    {
+      "state": "LAST_PREY_RISK",
+      "team_bucket": 8,
+      "type": "ROCK",
+      "sid": "DELAY_FEAST",
+      "fitness": 0.0915,
+      "visits": 1
+    },
+    {
+      "state": "LAST_PREY_RISK",
+      "team_bucket": 8,
+      "type": "SCISSORS",
+      "sid": "DELAY_FEAST",
+      "fitness": 0.1858,
+      "visits": 1
+    },
+    {
+      "state": "NEAR_WIPE",
+      "team_bucket": 8,
+      "type": "PAPER",
+      "sid": "LAST_STAND",
+      "fitness": 0.618,
+      "visits": 2
+    },
+    {
+      "state": "NEAR_WIPE",
+      "team_bucket": 8,
+      "type": "ROCK",
+      "sid": "LAST_STAND",
+      "fitness": 0.2957,
+      "visits": 2
+    },
+    {
+      "state": "NEAR_WIPE",
+      "team_bucket": 8,
+      "type": "SCISSORS",
+      "sid": "LAST_STAND",
+      "fitness": 0.4259,
+      "visits": 2
+    },
+    {
+      "state": "NO_PREY_FEAR_ALIVE",
+      "team_bucket": 8,
+      "type": "PAPER",
+      "sid": "SURVIVE_FEAR",
+      "fitness": 0.1376,
+      "visits": 1
+    },
+    {
+      "state": "NO_PREY_FEAR_ALIVE",
+      "team_bucket": 8,
+      "type": "ROCK",
+      "sid": "SURVIVE_FEAR",
+      "fitness": 0.0939,
+      "visits": 1
+    },
+    {
+      "state": "NO_PREY_FEAR_ALIVE",
+      "team_bucket": 8,
+      "type": "SCISSORS",
+      "sid": "SURVIVE_FEAR",
+      "fitness": 0.2173,
+      "visits": 1
+    },
+    {
+      "state": "OUTNUMBERED",
+      "team_bucket": 8,
+      "type": "PAPER",
+      "sid": "FORT_KITE",
+      "fitness": 0.3987,
+      "visits": 2
+    },
+    {
+      "state": "OUTNUMBERED",
+      "team_bucket": 8,
+      "type": "ROCK",
+      "sid": "ORBIT_KITE",
+      "fitness": 0.4444,
+      "visits": 2
+    },
+    {
+      "state": "OUTNUMBERED",
+      "team_bucket": 8,
+      "type": "SCISSORS",
+      "sid": "FORT_KITE",
+      "fitness": 0.3148,
+      "visits": 4
+    },
+    {
+      "state": "SMALL_UNIT",
+      "team_bucket": 8,
+      "type": "SCISSORS",
+      "sid": "SCATTER_RAID",
+      "fitness": 0.177,
+      "visits": 1
+    }
+  ],
+  "gen": 1
+}

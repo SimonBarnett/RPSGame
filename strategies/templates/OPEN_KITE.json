@@ -1,0 +1,165 @@
+{
+  "id": "OPEN_KITE",
+  "title": "Open kite",
+  "mode": "DEFEND",
+  "desc": "Outnumbered in open space: circle, slide walls, take only intercept shots. No fort required.",
+  "when": {
+    "states": [
+      "OUTNUMBERED",
+      "SMALL_UNIT"
+    ],
+    "priority": 68
+  },
+  "tactics": [
+    "wall_slide",
+    "fear_flee",
+    "flock_sep",
+    "raid_isolated",
+    "intercept"
+  ],
+  "math": [
+    "steer",
+    "boids",
+    "sectors"
+  ],
+  "movement": [
+    {
+      "fn": "sectors.orient",
+      "weight": 1.0
+    },
+    {
+      "fn": "steer._steer_around_walls",
+      "blend": 0.45
+    },
+    {
+      "fn": "boids.desired_heading",
+      "blend": 0.35
+    }
+  ],
+  "switch": {
+    "hold_frames": 6,
+    "margin": 1.05
+  },
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      24,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "avoid_weight": [
+      0.7,
+      2.5,
+      0.05
+    ],
+    "escape_bonus": [
+      0.4,
+      1.4,
+      0.04
+    ],
+    "sep_distance": [
+      2.5,
+      6.5,
+      0.15
+    ],
+    "small_raid_bonus": [
+      1.1,
+      2.3,
+      0.05
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "movement[0].weight": [
+      0.0,
+      2.0,
+      0.05
+    ],
+    "movement[1].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[2].blend": [
+      0.0,
+      1.0,
+      0.05
+    ]
+  },
+  "bounds": {
+    "avoid_weight": [
+      0.7,
+      2.5,
+      0.05
+    ],
+    "escape_bonus": [
+      0.4,
+      1.4,
+      0.04
+    ],
+    "sep_distance": [
+      2.5,
+      6.5,
+      0.15
+    ],
+    "small_raid_bonus": [
+      1.1,
+      2.3,
+      0.05
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "speed_base": [
+      0.9,
+      1.8,
+      0.02
+    ],
+    "turn_base": [
+      8.0,
+      22.0,
+      0.2
+    ],
+    "size": [
+      16.0,
+      24.0,
+      0.5
+    ],
+    "late_speed_mult": [
+      1.08,
+      1.35,
+      0.02
+    ],
+    "late_turn_mult": [
+      1.08,
+      1.28,
+      0.02
+    ],
+    "late_count_threshold": [
+      1,
+      3,
+      1
+    ]
+  },
+  "base": {
+    "speed_base": 1.3,
+    "turn_base": 13.0,
+    "size": 20,
+    "late_speed_mult": 1.22,
+    "late_turn_mult": 1.16,
+    "late_count_threshold": 2
+  }
+}

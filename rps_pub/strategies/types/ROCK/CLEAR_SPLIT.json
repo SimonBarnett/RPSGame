@@ -1,0 +1,370 @@
+{
+  "id": "CLEAR_SPLIT",
+  "title": "Clear split",
+  "mode": "HUNT",
+  "desc": "No predators left: Voronoi split + give ground so packs do not stack on one prey.",
+  "when": {
+    "states": [
+      "CLEAR_HUNT"
+    ],
+    "priority": 100
+  },
+  "tactics": [
+    "voronoi_split",
+    "flock_sep",
+    "prey_pull",
+    "wall_slide",
+    "intercept",
+    "give_ground",
+    "sparse_prey"
+  ],
+  "math": [
+    "voronoi",
+    "boids",
+    "steer",
+    "sectors",
+    "pressure"
+  ],
+  "movement": [
+    {
+      "fn": "voronoi.assign",
+      "when": "CLEAR_HUNT"
+    },
+    {
+      "fn": "sectors.chase_heading",
+      "weight": 1.4
+    },
+    {
+      "fn": "boids.desired_heading",
+      "blend": 0.15
+    },
+    {
+      "fn": "pressure.heading",
+      "blend": 0.35
+    }
+  ],
+  "switch": {
+    "hold_frames": 24.0,
+    "margin": 1.9985275445418655
+  },
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      24,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "voronoi_weight": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "sep_distance": [
+      2.5,
+      6.5,
+      0.15
+    ],
+    "near_target_aggro": [
+      1.2,
+      3.2,
+      0.05
+    ],
+    "avoid_weight": [
+      0.7,
+      2.5,
+      0.05
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "movement[1].weight": [
+      0.0,
+      2.0,
+      0.05
+    ],
+    "movement[2].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[3].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "pressure_own": [
+      0.2,
+      2.0,
+      0.08
+    ]
+  },
+  "type": "ROCK",
+  "enabled": true,
+  "weights": {
+    "voronoi_weight": 1.0,
+    "sep_distance": 7.0,
+    "near_target_aggro": 3.1985780603523994,
+    "avoid_weight": 2.417212109599828,
+    "predict_lookahead": 15.5015,
+    "finish_bonus": 1.1636,
+    "cluster_bonus": 1.1854,
+    "fear_close_mult": 3.2,
+    "escape_bonus": 1.359577421471832,
+    "cohesion_weight": 0.0,
+    "pack_hunt_mult": 0.2,
+    "focus_bonus": 1.3662,
+    "focus_fire_mult": 1.0114,
+    "support_join": 0.8177000000000001,
+    "target_lock_ttl": 78,
+    "target_lock_bonus": 1.980923827221305,
+    "target_switch_margin": 1.1074800320403024,
+    "scatter_threshold": 4,
+    "hunt_advantage": 1.3785,
+    "prey_reserve": 2,
+    "prey_reserve_penalty": 0.35,
+    "clear_finish_mult": 1.516706054596187,
+    "small_unit_threshold": 3,
+    "small_raid_bonus": 1.1,
+    "small_escape_mult": 2.1866124623292293,
+    "small_sep_mult": 1.9866124623292292,
+    "sep_softness": 1.3614,
+    "avoid_lookahead": 25.4805,
+    "small_aggro_mult": 0.8517,
+    "solo_finish_mult": 2.2925,
+    "outnumbered_fear_mult": 2.328,
+    "flank_bias": 1.0797,
+    "evade_threshold": 0.37879999999999997,
+    "evade_speed_mult": 0.3212,
+    "evade_brake": 0.6420454632627615,
+    "evade_reverse_risk": 1.0997999999999999,
+    "evade_turn_boost": 2.1767999999999996,
+    "evade_predict": 23.011595820542446,
+    "evade_sep_boost": 1.8376396656433958,
+    "late_speed_mult": 1.3146,
+    "late_turn_mult": 1.274,
+    "late_count_threshold": 2,
+    "team_scale_aggro": 0.3,
+    "team_scale_cohesion": 0.2987,
+    "team_scale_fear": 0.25,
+    "team_scale_pack": 0.2434201188933791,
+    "state_clear_hunt": 2.5955,
+    "state_last_prey_risk": 0.2725531737048523,
+    "state_no_prey_fear": 0.17675453673723857,
+    "state_outnumbered": 1.5957,
+    "state_small_unit": 1.5997,
+    "state_contested": 1.2428,
+    "fort_cover_weight": 1.6,
+    "fort_hide_bias": 1.5862060489829848,
+    "fort_ambush_bonus": 1.4,
+    "pincer_weight": 1.3732,
+    "pincer_spread": 1.0817999999999999,
+    "pincer_min_friends": 2,
+    "pincer_switch_hysteresis": 0.3161201188933791,
+    "pincer_switch_cooldown": 35,
+    "pincer_switch_gain": 1.3861624813857643,
+    "overcrowd_sep_boost": 2.0,
+    "overcrowd_cohesion_scale": 0.1913702507674532,
+    "overcrowd_threshold": 4,
+    "asymmetric_sep_front": 2.980475983611793,
+    "asymmetric_sep_rear": 1.0,
+    "speed_match_weight": 0.0,
+    "offset_pursue_dist": 4.9948,
+    "offset_pursue_gain": 1.7683,
+    "arrive_radius": 5.7617,
+    "arrive_slow": 0.7486999999999999,
+    "wander_strength": 0.3861,
+    "wander_rate": 0.288,
+    "clear_spread_weight": 1.0,
+    "clear_split_threshold": 2.0,
+    "clear_finish_speed": 1.3633,
+    "clear_reassign_dist": 6.6775,
+    "voronoi_balance": 0.9349999999999999,
+    "voronoi_recompute_interval": 8.0,
+    "voronoi_overflow_threshold": 3.0,
+    "clear_voronoi_cap_slack": 1.0,
+    "clear_voronoi_predict": 0.7690424387712691,
+    "delaunay_overflow": 0.9389937506509061,
+    "delaunay_k": 3.0,
+    "near_wipe_threshold": 2.0,
+    "near_wipe_sep_mult": 2.9620991641084893,
+    "near_wipe_evade_mult": 2.369680538530818,
+    "near_wipe_fort_mult": 2.1207,
+    "near_wipe_cohesion": 0.006742813164800552,
+    "state_near_wipe": 1.9831429670879985,
+    "ally_protect_weight": 2.5,
+    "ally_protect_radius": 20.0,
+    "threat_weight_base": 1.9306099742926641,
+    "threat_dist_exp": 2.2,
+    "threat_count_scale": 1.2,
+    "threat_closing_scale": 0.9782497027665522,
+    "threat_front_scale": 0.8925000000000001,
+    "no_corner_herd": 0.0766,
+    "open_field_bias": 1.4972,
+    "corner_zone_margin": 197.5995,
+    "hide_among_prey_weight": 1.2611,
+    "hide_among_prey_radius": 16.7414,
+    "hide_among_prey_min": 3.972008358915107,
+    "switch_hold_frames": 17.318059341759973,
+    "switch_margin": 1.6,
+    "pressure_own": 1.0199021713816336,
+    "pressure_fear": 1.0956120979659696,
+    "pressure_radius": 145.34195244264836,
+    "pressure_prey": 0.6676405015349065
+  },
+  "stats": {
+    "ticks": 4029,
+    "wins": 164.03522908877306,
+    "games": 434,
+    "conversions_for": 3251,
+    "conversions_against": 1437,
+    "last_prey_blunder": 0,
+    "blocked_womble": 0,
+    "by_mode": {
+      "HUNT": {
+        "ticks": 2623,
+        "conversions_against": 1139,
+        "conversions_for": 2647
+      },
+      "DEFEND": {
+        "ticks": 2,
+        "conversions_for": 6
+      },
+      "REGROUP": {
+        "ticks": 1358,
+        "conversions_against": 258,
+        "conversions_for": 574
+      },
+      "SCATTER": {
+        "ticks": 46,
+        "conversions_for": 24,
+        "conversions_against": 40
+      }
+    },
+    "ema": 0.07690362793572532,
+    "glimpse": 7180,
+    "alpha": 8.61217732035427,
+    "beta": 7.387822679645728,
+    "by_state": {
+      "CLEAR_HUNT": {
+        "n": 790,
+        "alpha": 14.035229088773052,
+        "beta": 1.0,
+        "ema": 0.0030420574459691027
+      }
+    },
+    "by_vs": {
+      "SCISSORS": {
+        "alpha": 395.7999999999946,
+        "beta": 1.0,
+        "n": 987
+      }
+    },
+    "q": {
+      "CLEAR_HUNT|p4|f0": 1.1919459159338737,
+      "CLEAR_HUNT|p1|f0": 1.2819134773981353,
+      "CLEAR_HUNT|p3|f0": 1.271827741132335,
+      "CLEAR_HUNT|p2|f0": 1.2564302791104183
+    },
+    "mc_G": 1.312,
+    "pulls": 1168,
+    "pulls_by_state": {
+      "CLEAR_HUNT": 1168
+    }
+  },
+  "bounds": {
+    "voronoi_weight": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "sep_distance": [
+      2.5,
+      6.5,
+      0.15
+    ],
+    "near_target_aggro": [
+      1.2,
+      3.2,
+      0.05
+    ],
+    "avoid_weight": [
+      0.7,
+      2.5,
+      0.05
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "pressure_own": [
+      0.2,
+      2.0,
+      0.08
+    ],
+    "speed_base": [
+      0.9,
+      1.8,
+      0.02
+    ],
+    "turn_base": [
+      8.0,
+      22.0,
+      0.2
+    ],
+    "size": [
+      16.0,
+      24.0,
+      0.5
+    ],
+    "late_speed_mult": [
+      1.08,
+      1.35,
+      0.02
+    ],
+    "late_turn_mult": [
+      1.08,
+      1.28,
+      0.02
+    ],
+    "late_count_threshold": [
+      1,
+      3,
+      1
+    ]
+  },
+  "base": {
+    "speed_base": 1.2,
+    "turn_base": 16.5,
+    "size": 20,
+    "late_speed_mult": 1.3337999999999999,
+    "late_turn_mult": 1.2078,
+    "late_count_threshold": 2
+  },
+  "games_seen": 620,
+  "last_changes": [
+    "PAPER.cohesion_weight: 0.984 -> 0.9884999999999999  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.focus_fire_mult: 1.4693 -> 1.4753  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.predict_lookahead: 18.8028 -> 18.8778  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.evade_turn_boost: 2.1191 -> 2.1250999999999998  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.late_speed_mult: 1.334 -> 1.337  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.late_turn_mult: 1.2099 -> 1.2128999999999999  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.state_last_prey_risk: 0.2758 -> 0.2713  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.speed_match_weight: 0.776 -> 0.782  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.no_corner_herd: 1.5252 -> 1.5401999999999998  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.hide_among_prey_weight: 1.4597 -> 1.4717  (replicator help PAPER p=-0.117, w=0.15)",
+    "PAPER.hide_among_prey_radius: 17.9351 -> 18.010099999999998  (replicator help PAPER p=-0.117, w=0.15)",
+    "SCISSORS.focus_fire_mult: 1.0826 -> 1.0762604858398437  (replicator curb SCISSORS p=0.071, w=0.16)"
+  ]
+}

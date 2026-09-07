@@ -1,0 +1,383 @@
+{
+  "id": "GATE_CAMP",
+  "type": "PAPER",
+  "enabled": false,
+  "bounds": {
+    "fort_ambush_bonus": [
+      0.4,
+      1.4,
+      0.04
+    ],
+    "pincer_weight": [
+      0.4,
+      1.7,
+      0.04
+    ],
+    "near_target_aggro": [
+      1.2,
+      3.2,
+      0.05
+    ],
+    "no_corner_herd": [
+      0.0,
+      2.0,
+      0.1
+    ],
+    "speed_base": [
+      0.9,
+      1.8,
+      0.02
+    ],
+    "turn_base": [
+      8.0,
+      22.0,
+      0.2
+    ],
+    "size": [
+      16.0,
+      24.0,
+      0.5
+    ],
+    "late_speed_mult": [
+      1.08,
+      1.35,
+      0.02
+    ],
+    "late_turn_mult": [
+      1.08,
+      1.28,
+      0.02
+    ],
+    "late_count_threshold": [
+      1,
+      3,
+      1
+    ]
+  },
+  "base": {
+    "speed_base": 1.48,
+    "turn_base": 9.5,
+    "size": 20,
+    "late_speed_mult": 1.3148,
+    "late_turn_mult": 1.1913999999999998,
+    "late_count_threshold": 2
+  },
+  "weights": {
+    "near_target_aggro": 1.6532286720409088,
+    "late_speed_mult": 1.3139,
+    "late_turn_mult": 1.2675012498698188,
+    "late_count_threshold": 2,
+    "fort_ambush_bonus": 1.3073929813117129,
+    "pincer_weight": 0.8817137920826303,
+    "no_corner_herd": 1.0052981824877163,
+    "small_raid_bonus": 1.5331000000000001,
+    "cluster_bonus": 0.9997,
+    "clear_finish_mult": 2.9579769886920873,
+    "support_join": 0.5784999999999999,
+    "pack_hunt_mult": 1.6482,
+    "hunt_advantage": 0.9399,
+    "state_clear_hunt": 2.1498000000000004,
+    "focus_bonus": 0.8397,
+    "small_aggro_mult": 1.0497999999999998,
+    "finish_bonus": 1.2296,
+    "flank_bias": 0.5997,
+    "solo_finish_mult": 1.4747000000000001,
+    "focus_fire_mult": 1.085,
+    "asymmetric_sep_front": 2.94471616819381,
+    "predict_lookahead": 18.5028,
+    "evade_turn_boost": 2.1071999999999997,
+    "state_last_prey_risk": 0.3038,
+    "threat_closing_scale": 0.9964,
+    "hide_among_prey_weight": 1.4358,
+    "hide_among_prey_radius": 17.7858,
+    "ally_protect_weight": 2.485,
+    "cohesion_weight": 0.9501,
+    "state_no_prey_fear": 0.10149999999999999,
+    "pincer_switch_gain": 1.3997,
+    "speed_match_weight": 0.744,
+    "offset_pursue_gain": 1.7712,
+    "delaunay_overflow": 0.9966,
+    "threat_dist_exp": 2.199,
+    "movement[0].blend": 0.2450051867561539,
+    "movement[1].blend": 0.5461151372717833,
+    "movement[2].blend": 0.6531206341653872,
+    "movement[3].blend": 0.5745696532652874,
+    "state_outnumbered": 1.5997,
+    "state_contested": 1.2493999999999998,
+    "threat_front_scale": 0.8793
+  },
+  "title": "Gate camp",
+  "desc": "Park in the alley between two forts. Flow funnels prey into the gap; pincer the exit.",
+  "mode": "HUNT",
+  "when": {
+    "states": [],
+    "priority": 56
+  },
+  "tactics": [
+    "fort_ambush",
+    "pincer_flank",
+    "flow_field",
+    "no_corner_herd",
+    "focus_fire"
+  ],
+  "math": [
+    "cover",
+    "flow",
+    "steer",
+    "form"
+  ],
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      24,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "fort_ambush_bonus": [
+      0.4,
+      1.4,
+      0.04
+    ],
+    "pincer_weight": [
+      0.4,
+      1.7,
+      0.04
+    ],
+    "near_target_aggro": [
+      1.2,
+      3.2,
+      0.05
+    ],
+    "no_corner_herd": [
+      0.0,
+      2.0,
+      0.1
+    ],
+    "movement[0].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[1].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[2].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[3].blend": [
+      0.0,
+      1.0,
+      0.05
+    ]
+  },
+  "movement": [
+    {
+      "fn": "form.slot_heading",
+      "blend": 0.4305645495699304,
+      "shape": "line"
+    },
+    {
+      "fn": "flow.heading",
+      "blend": 0.36958061840601536,
+      "when": "chase"
+    },
+    {
+      "fn": "steer.pincer_heading",
+      "blend": 0.3448001110528796,
+      "when": "chase"
+    },
+    {
+      "fn": "cover.best_cover_fort",
+      "blend": 0.21802757667101555
+    }
+  ],
+  "switch": {
+    "hold_frames": 8,
+    "margin": 0.7768501131369487
+  },
+  "stats": {
+    "ticks": 657,
+    "wins": 13.520054945054946,
+    "games": 73,
+    "conversions_for": 973,
+    "conversions_against": 1172,
+    "last_prey_blunder": 2,
+    "blocked_womble": 0,
+    "by_mode": {
+      "HUNT": {
+        "ticks": 235,
+        "conversions_against": 619,
+        "conversions_for": 358
+      },
+      "DEFEND": {
+        "ticks": 58,
+        "conversions_against": 10
+      },
+      "REGROUP": {
+        "ticks": 189,
+        "conversions_against": 305,
+        "conversions_for": 420,
+        "last_prey_blunder": 1
+      },
+      "SCATTER": {
+        "ticks": 175,
+        "conversions_against": 238,
+        "conversions_for": 195,
+        "last_prey_blunder": 1
+      }
+    },
+    "ema": -0.02000000000448192,
+    "glimpse": 7360,
+    "alpha": 7.222222222222225,
+    "beta": 8.777777777777773,
+    "by_state": {
+      "CONTESTED": {
+        "n": 116,
+        "alpha": 5.670970695970695,
+        "beta": 5.665674603174604,
+        "ema": -0.03953151250901998
+      },
+      "CLEAR_HUNT": {
+        "n": 12,
+        "alpha": 2.4690476190476187,
+        "beta": 1.0,
+        "ema": 0.2599627481937458
+      },
+      "OUTNUMBERED": {
+        "n": 61,
+        "alpha": 2.237179487179487,
+        "beta": 7.179563492063491,
+        "ema": -0.062122295310702146
+      },
+      "NO_PREY_FEAR_ALIVE": {
+        "n": 1,
+        "alpha": 1.0,
+        "beta": 1.0,
+        "ema": -0.0024
+      },
+      "SMALL_UNIT": {
+        "n": 2,
+        "alpha": 1.1428571428571428,
+        "beta": 1.1111111111111112,
+        "ema": 0.07398095238095238
+      }
+    },
+    "by_vs": {
+      "ROCK": {
+        "alpha": 330.19999999999834,
+        "beta": 2.0,
+        "n": 824
+      }
+    },
+    "q": {
+      "CONTESTED|p4|f1": -1.6459592922510142,
+      "CLEAR_HUNT|p4|f0": 0.6761572774888837,
+      "CLEAR_HUNT|p3|f0": 0.39042679026609767,
+      "CLEAR_HUNT|p1|f0": 0.3378096649398761,
+      "CONTESTED|p4|f0": -1.2990737608457414,
+      "NEAR_WIPE|p4|f1": -0.3835302373527203,
+      "OUTNUMBERED|p4|f1": -1.2657308081505556,
+      "CONTESTED|p0|f0": 0.25999211722077276,
+      "LAST_MAN|p4|f1": -0.06857652626435667,
+      "LAST_PREY_RISK|p1|f1": -0.364233358381459,
+      "NO_PREY_FEAR_ALIVE|p0|f1": -0.364233358381459,
+      "LAST_MAN|p0|f1": -0.364233358381459,
+      "LAST_PREY_RISK|p0|f1": -0.364233358381459,
+      "CLEAR_HUNT|p2|f0": 0.3079285825512058
+    },
+    "mc_G": -3.5706,
+    "bo": {
+      "keys": [
+        "switch.hold_frames",
+        "switch.margin",
+        "fort_ambush_bonus",
+        "pincer_weight",
+        "near_target_aggro",
+        "no_corner_herd",
+        "movement[0].blend",
+        "movement[1].blend",
+        "movement[2].blend",
+        "movement[3].blend"
+      ],
+      "X": [
+        [
+          1.0,
+          1.0,
+          0.32380104456031716,
+          0.4747750978666513,
+          1.0,
+          0.34225,
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ],
+        [
+          1.0,
+          0.9953464884410019,
+          0.34968330538506015,
+          0.5047831955877987,
+          1.0,
+          0.33963199582983933,
+          0.5188625355718877,
+          0.5365588236273688,
+          0.4967882927270586,
+          0.5505708699609144
+        ],
+        [
+          0.9996683444492285,
+          0.967555568272423,
+          0.3936056929836122,
+          0.409360458994573,
+          0.9633745772165627,
+          0.2971253218311906,
+          0.5588419503370657,
+          0.44950416005118543,
+          0.4310291399610092,
+          0.4904824590355557
+        ],
+        [
+          0.9930877965971061,
+          1.0,
+          0.3231068334352737,
+          0.5040657532895838,
+          1.0,
+          0.4037548238706259,
+          0.5235605815562757,
+          0.4798371765245503,
+          0.41802477144730177,
+          0.5251894406351431
+        ]
+      ],
+      "y": [
+        1.1053228532787474,
+        1.123415887352069,
+        1.1089478959787127,
+        1.0804075888592384
+      ],
+      "c": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  },
+  "games_seen": 2205,
+  "last_changes": [
+    "PAPER.clear_finish_mult: 2.9242 -> 2.941076988692087  (replicator small-team, w=0.34)"
+  ]
+}

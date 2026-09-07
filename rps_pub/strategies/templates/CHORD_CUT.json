@@ -1,0 +1,43 @@
+{
+  "id": "CHORD_CUT",
+  "title": "Chord cut",
+  "mode": "HUNT",
+  "desc": "Cut the chord of a circling prey. Counter to ORBIT_KITE mirrors that otherwise never close.",
+  "when": {
+    "states": ["CONTESTED", "CLEAR_HUNT", "SMALL_UNIT"],
+    "priority": 72
+  },
+  "tactics": ["chord_cut", "lead_intercept", "flock_sep", "prey_pull", "wall_slide"],
+  "math": ["intercept", "time", "steer", "boids"],
+  "movement": [
+    {"fn": "intercept.chord", "blend": 0.7},
+    {"fn": "intercept.lead", "blend": 0.35},
+    {"fn": "boids.desired_heading", "blend": 0.15}
+  ],
+  "switch": {"hold_frames": 6, "margin": 1.05},
+  "tunables": {
+    "switch.hold_frames": [2, 24, 1],
+    "switch.margin": [0.5, 2.0, 0.05],
+    "when.priority": [1, 120, 4],
+    "predict_lookahead": [6.0, 22.0, 0.5],
+    "near_target_aggro": [1.2, 3.2, 0.05],
+    "movement[0].blend": [0.0, 1.0, 0.05],
+    "movement[1].blend": [0.0, 1.0, 0.05]
+  },
+  "bounds": {
+    "predict_lookahead": [6.0, 22.0, 0.5],
+    "near_target_aggro": [1.2, 3.2, 0.05]
+  },
+  "base": {
+    "speed_base": 1.32,
+    "turn_base": 14.0,
+    "size": 20,
+    "late_speed_mult": 1.22,
+    "late_turn_mult": 1.16,
+    "late_count_threshold": 2
+  },
+  "weights": {
+    "predict_lookahead": 14.0,
+    "near_target_aggro": 2.2
+  }
+}

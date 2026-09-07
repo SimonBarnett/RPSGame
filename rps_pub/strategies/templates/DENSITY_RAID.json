@@ -1,0 +1,146 @@
+{
+  "id": "DENSITY_RAID",
+  "title": "Density raid",
+  "mode": "SCATTER",
+  "desc": "Small unit: hunt the sparsest prey, ignore the blob.",
+  "when": {
+    "states": [
+      "SMALL_UNIT",
+      "CONTESTED"
+    ],
+    "priority": 57
+  },
+  "tactics": [
+    "sparse_prey",
+    "raid_isolated",
+    "give_ground",
+    "intercept"
+  ],
+  "math": [
+    "pressure",
+    "sectors",
+    "steer"
+  ],
+  "movement": [
+    {
+      "fn": "pressure.heading",
+      "blend": 0.5
+    },
+    {
+      "fn": "sectors.orient",
+      "blend": 0.35,
+      "when": "chase"
+    }
+  ],
+  "switch": {
+    "hold_frames": 5,
+    "margin": 1.08
+  },
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      24,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "pressure_prey": [
+      0.1,
+      1.6,
+      0.06
+    ],
+    "pressure_own": [
+      0.2,
+      2.0,
+      0.08
+    ],
+    "small_raid_bonus": [
+      1.1,
+      2.3,
+      0.05
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "movement[0].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[1].blend": [
+      0.0,
+      1.0,
+      0.05
+    ]
+  },
+  "bounds": {
+    "pressure_prey": [
+      0.1,
+      1.6,
+      0.06
+    ],
+    "pressure_own": [
+      0.2,
+      2.0,
+      0.08
+    ],
+    "small_raid_bonus": [
+      1.1,
+      2.3,
+      0.05
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "speed_base": [
+      0.9,
+      1.8,
+      0.02
+    ],
+    "turn_base": [
+      8.0,
+      22.0,
+      0.2
+    ],
+    "size": [
+      16.0,
+      24.0,
+      0.5
+    ],
+    "late_speed_mult": [
+      1.08,
+      1.35,
+      0.02
+    ],
+    "late_turn_mult": [
+      1.08,
+      1.28,
+      0.02
+    ],
+    "late_count_threshold": [
+      1,
+      3,
+      1
+    ]
+  },
+  "base": {
+    "speed_base": 1.3,
+    "turn_base": 13.0,
+    "size": 20,
+    "late_speed_mult": 1.22,
+    "late_turn_mult": 1.16,
+    "late_count_threshold": 2
+  }
+}

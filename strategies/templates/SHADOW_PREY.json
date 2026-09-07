@@ -1,0 +1,168 @@
+{
+  "id": "SHADOW_PREY",
+  "title": "Shadow prey",
+  "mode": "SCATTER",
+  "desc": "Fear alive: hide inside the prey flock so predators must risk hitting their food.",
+  "when": {
+    "states": [
+      "OUTNUMBERED",
+      "SMALL_UNIT",
+      "NEAR_WIPE",
+      "NO_PREY_FEAR_ALIVE"
+    ],
+    "priority": 72
+  },
+  "tactics": [
+    "hide_in_prey",
+    "fear_flee",
+    "flock_sep",
+    "fort_cover",
+    "intercept"
+  ],
+  "math": [
+    "sectors",
+    "boids",
+    "cover",
+    "steer"
+  ],
+  "movement": [
+    {
+      "fn": "sectors.orient",
+      "weight": 1.0
+    },
+    {
+      "fn": "boids.desired_heading",
+      "blend": 0.5
+    },
+    {
+      "fn": "cover.cover_heading",
+      "blend": 0.25
+    }
+  ],
+  "switch": {
+    "hold_frames": 5,
+    "margin": 1.0
+  },
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      24,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "hide_among_prey_weight": [
+      0.0,
+      2.2,
+      0.08
+    ],
+    "escape_bonus": [
+      0.4,
+      1.4,
+      0.04
+    ],
+    "sep_distance": [
+      2.5,
+      6.5,
+      0.15
+    ],
+    "fort_cover_weight": [
+      0.5,
+      1.6,
+      0.04
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "movement[0].weight": [
+      0.0,
+      2.0,
+      0.05
+    ],
+    "movement[1].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[2].blend": [
+      0.0,
+      1.0,
+      0.05
+    ]
+  },
+  "bounds": {
+    "hide_among_prey_weight": [
+      0.0,
+      2.2,
+      0.08
+    ],
+    "escape_bonus": [
+      0.4,
+      1.4,
+      0.04
+    ],
+    "sep_distance": [
+      2.5,
+      6.5,
+      0.15
+    ],
+    "fort_cover_weight": [
+      0.5,
+      1.6,
+      0.04
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "speed_base": [
+      0.9,
+      1.8,
+      0.02
+    ],
+    "turn_base": [
+      8.0,
+      22.0,
+      0.2
+    ],
+    "size": [
+      16.0,
+      24.0,
+      0.5
+    ],
+    "late_speed_mult": [
+      1.08,
+      1.35,
+      0.02
+    ],
+    "late_turn_mult": [
+      1.08,
+      1.28,
+      0.02
+    ],
+    "late_count_threshold": [
+      1,
+      3,
+      1
+    ]
+  },
+  "base": {
+    "speed_base": 1.3,
+    "turn_base": 13.0,
+    "size": 20,
+    "late_speed_mult": 1.22,
+    "late_turn_mult": 1.16,
+    "late_count_threshold": 2
+  }
+}

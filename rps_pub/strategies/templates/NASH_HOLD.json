@@ -1,0 +1,157 @@
+{
+  "id": "NASH_HOLD",
+  "title": "Nash hold",
+  "mode": "REGROUP",
+  "desc": "Winning too hard locks a hierarchy (pure Nash). Ease off: give ground, escort, stop the last conversion while fear lives.",
+  "when": {
+    "states": [
+      "CONTESTED",
+      "LAST_PREY_RISK"
+    ],
+    "priority": 62
+  },
+  "tactics": [
+    "give_ground",
+    "form_wedge",
+    "eta_gate",
+    "no_corner_herd",
+    "flock_sep"
+  ],
+  "math": [
+    "pressure",
+    "form",
+    "time",
+    "boids"
+  ],
+  "movement": [
+    {
+      "fn": "pressure.heading",
+      "blend": 0.45
+    },
+    {
+      "fn": "form.slot_heading",
+      "blend": 0.3,
+      "shape": "wedge"
+    },
+    {
+      "fn": "time.heading",
+      "blend": 0.4
+    }
+  ],
+  "switch": {
+    "hold_frames": 7,
+    "margin": 1.12
+  },
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      24,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "pressure_own": [
+      0.2,
+      2.0,
+      0.08
+    ],
+    "cohesion_weight": [
+      0.2,
+      1.0,
+      0.03
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "no_corner_herd": [
+      0.0,
+      2.0,
+      0.1
+    ],
+    "movement[0].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[1].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[2].blend": [
+      0.0,
+      1.0,
+      0.05
+    ]
+  },
+  "bounds": {
+    "pressure_own": [
+      0.2,
+      2.0,
+      0.08
+    ],
+    "cohesion_weight": [
+      0.2,
+      1.0,
+      0.03
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "no_corner_herd": [
+      0.0,
+      2.0,
+      0.1
+    ],
+    "speed_base": [
+      0.9,
+      1.8,
+      0.02
+    ],
+    "turn_base": [
+      8.0,
+      22.0,
+      0.2
+    ],
+    "size": [
+      16.0,
+      24.0,
+      0.5
+    ],
+    "late_speed_mult": [
+      1.08,
+      1.35,
+      0.02
+    ],
+    "late_turn_mult": [
+      1.08,
+      1.28,
+      0.02
+    ],
+    "late_count_threshold": [
+      1,
+      3,
+      1
+    ]
+  },
+  "base": {
+    "speed_base": 1.3,
+    "turn_base": 13.0,
+    "size": 20,
+    "late_speed_mult": 1.22,
+    "late_turn_mult": 1.16,
+    "late_count_threshold": 2
+  }
+}

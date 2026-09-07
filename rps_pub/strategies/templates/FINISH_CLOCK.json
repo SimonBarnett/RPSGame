@@ -1,0 +1,94 @@
+{
+  "id": "FINISH_CLOCK",
+  "title": "Finish clock",
+  "mode": "HUNT",
+  "desc": "Predators in a clean endgame: minimise time-to-contact on assigned prey. Opposite of LAST_MAN_CLOCK.",
+  "when": {
+    "states": [
+      "CLEAR_HUNT"
+    ],
+    "priority": 97
+  },
+  "tactics": [
+    "clock_eta",
+    "voronoi_split",
+    "prey_pull",
+    "flock_sep",
+    "intercept"
+  ],
+  "math": [
+    "time",
+    "voronoi",
+    "steer",
+    "boids"
+  ],
+  "movement": [
+    {
+      "fn": "voronoi.assign",
+      "when": "CLEAR_HUNT"
+    },
+    {
+      "fn": "time.heading",
+      "blend": 0.7
+    },
+    {
+      "fn": "boids.desired_heading",
+      "blend": 0.15
+    }
+  ],
+  "switch": {
+    "hold_frames": 6,
+    "margin": 1.0
+  },
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      24,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "predict_lookahead": [
+      8.0,
+      24.0,
+      0.5
+    ],
+    "near_target_aggro": [
+      1.4,
+      3.2,
+      0.05
+    ]
+  },
+  "bounds": {
+    "predict_lookahead": [
+      8.0,
+      24.0,
+      0.5
+    ],
+    "near_target_aggro": [
+      1.4,
+      3.2,
+      0.05
+    ]
+  },
+  "base": {
+    "speed_base": 1.35,
+    "turn_base": 13.0,
+    "size": 20,
+    "late_speed_mult": 1.25,
+    "late_turn_mult": 1.16,
+    "late_count_threshold": 2
+  },
+  "weights": {
+    "predict_lookahead": 14.0,
+    "near_target_aggro": 2.4
+  }
+}

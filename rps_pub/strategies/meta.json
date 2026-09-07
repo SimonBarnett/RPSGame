@@ -1,0 +1,177 @@
+{
+  "schema": 1,
+  "notes": "Evolving data only. Compiled code reads this; optimiser may rewrite banned/force/motion clamps.",
+  "last_prey_risk_max": 2,
+  "evolve": {
+    "clone_new_templates": true,
+    "tune_weights": true,
+    "tune_when_priority": true,
+    "tune_switch": true,
+    "tune_motion_identity": true,
+    "allow_enable_disable": true
+  },
+  "banned": {
+    "PAPER": [
+      "GATE_CAMP",
+      "DELAY_FEAST",
+      "PACK_HUNT",
+      "LANE_SWEEP",
+      "ROLE_SWEEP"
+    ],
+    "SCISSORS": [
+      "ROLE_SWEEP",
+      "PACK_HUNT",
+      "LANE_SWEEP",
+      "GATE_CAMP",
+      "SCREEN_HUNT",
+      "STALL_BREAK"
+    ],
+    "ROCK": [
+      "GATE_CAMP"
+    ]
+  },
+  "force": {
+    "PAPER": {
+      "CONTESTED": [
+        "FORT_KITE",
+        "OPEN_KITE",
+        "ORBIT_KITE",
+        "BOUNCE_JUKE",
+        "CROSS_LANE"
+      ],
+      "OUTNUMBERED": [
+        "FORT_KITE",
+        "OPEN_KITE",
+        "ORBIT_KITE"
+      ],
+      "NO_PREY_FEAR_ALIVE": [
+        "FEAR_RIDGE",
+        "FORT_KITE",
+        "OPEN_KITE"
+      ],
+      "NEAR_WIPE": [
+        "ESCORT_RING",
+        "LAST_MAN_RUN",
+        "OPEN_KITE"
+      ],
+      "LAST_MAN": [
+        "LAST_MAN_RUN",
+        "FEAR_RIDGE"
+      ],
+      "CLEAR_HUNT": [
+        "ETA_STRIKE",
+        "CROSS_LANE",
+        "CLEAR_SPLIT"
+      ],
+      "LAST_PREY_RISK": [
+        "LAST_PREY_CARE",
+        "LAST_MEAL_ORBIT",
+        "LAST_MEAL_STALL",
+        "GIVE_GROUND"
+      ]
+    },
+    "SCISSORS": {
+      "CONTESTED": [
+        "FORT_KITE",
+        "BOUNCE_JUKE",
+        "ORBIT_KITE",
+        "SURVIVE_FEAR"
+      ],
+      "OUTNUMBERED": [
+        "ORBIT_KITE",
+        "BOUNCE_JUKE",
+        "FORT_KITE"
+      ],
+      "CLEAR_HUNT": [
+        "CLEAR_SPLIT",
+        "ETA_STRIKE",
+        "CROSS_LANE"
+      ],
+      "LAST_PREY_RISK": [
+        "LAST_PREY_CARE",
+        "LAST_MEAL_ORBIT",
+        "GIVE_GROUND"
+      ],
+      "NO_PREY_FEAR_ALIVE": [
+        "SURVIVE_FEAR",
+        "ORBIT_KITE"
+      ],
+      "NEAR_WIPE": [
+        "ESCORT_RING",
+        "LAST_MAN_RUN"
+      ],
+      "LAST_MAN": [
+        "LAST_MAN_RUN",
+        "SURVIVE_FEAR"
+      ]
+    },
+    "ROCK": {
+      "CONTESTED": [
+        "SCREEN_HUNT",
+        "PACK_HUNT",
+        "ETA_STRIKE",
+        "LANE_SWEEP"
+      ],
+      "CLEAR_HUNT": [
+        "CLEAR_SPLIT",
+        "ETA_STRIKE"
+      ],
+      "LAST_PREY_RISK": [
+        "LAST_PREY_CARE",
+        "LAST_MEAL_ORBIT",
+        "GIVE_GROUND"
+      ]
+    }
+  },
+  "motion": {
+    "window": 40,
+    "min_n": 12,
+    "speed_step": 0.02,
+    "turn_step": 0.12,
+    "min_speed_gap": 0.08,
+    "min_turn_gap": 0.35,
+    "target": 0.333333,
+    "high": 0.4,
+    "low": 0.26,
+    "speed_bounds": {
+      "ROCK": [
+        1.08,
+        1.4
+      ],
+      "SCISSORS": [
+        1.22,
+        1.55
+      ],
+      "PAPER": [
+        1.48,
+        1.88
+      ]
+    },
+    "turn_bounds": {
+      "PAPER": [
+        11.2,
+        13.0
+      ],
+      "SCISSORS": [
+        12.2,
+        14.0
+      ],
+      "ROCK": [
+        13.4,
+        16.0
+      ]
+    },
+    "order": {
+      "speed": [
+        "ROCK",
+        "SCISSORS",
+        "PAPER"
+      ],
+      "turn": [
+        "PAPER",
+        "SCISSORS",
+        "ROCK"
+      ]
+    }
+  }
+}

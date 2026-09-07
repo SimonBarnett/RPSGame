@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "notes": "Motion-identity balancer tunables. Optimizer reads and may write steps/gaps. Triangle order is frozen.",
+  "window": 40,
+  "min_n": 12,
+  "cooldown_games": 8,
+  "speed_step": 0.02,
+  "turn_step": 0.12,
+  "target": 0.333333,
+  "min_speed_gap": 0.08,
+  "min_turn_gap": 0.35,
+  "order": {
+    "speed": [
+      "ROCK",
+      "SCISSORS",
+      "PAPER"
+    ],
+    "turn": [
+      "PAPER",
+      "SCISSORS",
+      "ROCK"
+    ]
+  },
+  "speed_bounds": {
+    "ROCK": [
+      1.08,
+      1.4
+    ],
+    "SCISSORS": [
+      1.22,
+      1.55
+    ],
+    "PAPER": [
+      1.48,
+      1.88
+    ]
+  },
+  "turn_bounds": {
+    "PAPER": [
+      11.2,
+      13.0
+    ],
+    "SCISSORS": [
+      12.2,
+      14.0
+    ],
+    "ROCK": [
+      13.4,
+      16.0
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "ROCK": { "speed_base": 1.3896, "turn_base": 15.9375 },
+  "PAPER": { "speed_base": 1.7508, "turn_base": 12.225 },
+  "SCISSORS": { "speed_base": 1.4737, "turn_base": 12.575 }
+}

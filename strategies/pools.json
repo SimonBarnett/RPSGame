@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "notes": "Legal sets are DATA. Python only loads this. New templates with matching when.states are legal unless banned or excluded.",
+  "banned": {
+    "PAPER": [
+      "GATE_CAMP",
+      "PACK_HUNT",
+      "LANE_SWEEP",
+      "ROLE_SWEEP",
+      "DELAY_FEAST"
+    ],
+    "SCISSORS": [
+      "ROLE_SWEEP",
+      "GATE_CAMP",
+      "PACK_HUNT",
+      "LANE_SWEEP",
+      "STALL_BREAK",
+      "SCREEN_HUNT"
+    ],
+    "ROCK": []
+  },
+  "fallback": {
+    "PAPER": [
+      "FORT_KITE",
+      "ORBIT_KITE",
+      "OPEN_KITE",
+      "ETA_STRIKE",
+      "CROSS_LANE"
+    ],
+    "SCISSORS": [
+      "BOUNCE_JUKE",
+      "FORT_KITE",
+      "ORBIT_KITE",
+      "SURVIVE_FEAR"
+    ],
+    "ROCK": [
+      "LANE_SWEEP",
+      "SCREEN_HUNT",
+      "PACK_HUNT"
+    ]
+  },
+  "exclude_from_state": {
+    "CONTESTED": [
+      "HOLD_COVER",
+      "REGROUP_RIDGE"
+    ],
+    "LAST_PREY_RISK": [
+      "DELAY_FEAST",
+      "ETA_STRIKE"
+    ],
+    "CLEAR_HUNT": [
+      "LAST_PREY_CARE",
+      "DELAY_FEAST",
+      "LAST_MEAL_STALL",
+      "GIVE_GROUND",
+      "PRESSURE_BREAK",
+      "SURVIVE_FEAR",
+      "LAST_MAN_RUN",
+      "LAST_MAN_CLOCK",
+      "ORBIT_KITE"
+    ]
+  },
+  "prefer": {
+    "PAPER": {
+      "CONTESTED": [
+        "FORT_KITE",
+        "ORBIT_KITE",
+        "OPEN_KITE",
+        "BOUNCE_JUKE",
+        "CROSS_LANE",
+        "ETA_STRIKE",
+        "WALL_CUTOFF"
+      ],
+      "OUTNUMBERED": [
+        "SCREEN_HUNT",
+        "OPEN_KITE",
+        "ORBIT_KITE"
+      ],
+      "LAST_PREY_RISK": [
+        "LAST_PREY_CARE",
+        "LAST_MEAL_ORBIT",
+        "LAST_MEAL_STALL",
+        "GIVE_GROUND",
+        "PRESSURE_BREAK"
+      ],
+      "CLEAR_HUNT": [
+        "ETA_STRIKE",
+        "CROSS_LANE",
+        "CLEAR_SPLIT"
+      ],
+      "NEAR_WIPE": [
+        "ESCORT_RING",
+        "LAST_MAN_RUN",
+        "OPEN_KITE"
+      ],
+      "LAST_MAN": [
+        "LAST_MAN_RUN",
+        "FEAR_RIDGE"
+      ],
+      "NO_PREY_FEAR_ALIVE": [
+        "FEAR_RIDGE",
+        "FORT_KITE",
+        "OPEN_KITE"
+      ]
+    },
+    "SCISSORS": {
+      "CONTESTED": [
+        "FORT_KITE",
+        "BOUNCE_JUKE",
+        "ORBIT_KITE",
+        "SURVIVE_FEAR"
+      ],
+      "OUTNUMBERED": [
+        "ORBIT_KITE",
+        "BOUNCE_JUKE",
+        "FORT_KITE"
+      ],
+      "LAST_PREY_RISK": [
+        "LAST_PREY_CARE",
+        "LAST_MEAL_ORBIT",
+        "GIVE_GROUND"
+      ],
+      "CLEAR_HUNT": [
+        "CLEAR_SPLIT",
+        "ETA_STRIKE",
+        "CROSS_LANE"
+      ],
+      "NEAR_WIPE": [
+        "ESCORT_RING",
+        "LAST_MAN_RUN"
+      ],
+      "LAST_MAN": [
+        "LAST_MAN_RUN",
+        "SURVIVE_FEAR"
+      ],
+      "NO_PREY_FEAR_ALIVE": [
+        "SURVIVE_FEAR",
+        "ORBIT_KITE"
+      ]
+    },
+    "ROCK": {
+      "CONTESTED": [
+        "SCREEN_HUNT",
+        "PACK_HUNT",
+        "ETA_STRIKE",
+        "LANE_SWEEP"
+      ],
+      "LAST_PREY_RISK": [
+        "LAST_PREY_CARE",
+        "LAST_MEAL_ORBIT",
+        "GIVE_GROUND"
+      ],
+      "CLEAR_HUNT": [
+        "CLEAR_SPLIT",
+        "ETA_STRIKE"
+      ],
+      "NEAR_WIPE": [
+        "ESCORT_RING",
+        "LAST_MAN_RUN"
+      ],
+      "LAST_MAN": [
+        "LAST_MAN_RUN"
+      ]
+    }
+  },
+  "endgame": {
+    "finish": [
+      "CLEAR_SPLIT",
+      "CLEAR_FAN",
+      "FINISH_CLOCK",
+      "MARK_ONE",
+      "LANE_SWEEP",
+      "CROSS_LANE",
+      "STALL_BREAK",
+      "WALL_CUTOFF",
+      "ETA_SPLIT"
+    ],
+    "care": [
+      "LAST_PREY_CARE",
+      "LAST_MEAL_ORBIT",
+      "LAST_MEAL_STALL"
+    ],
+    "prey": [
+      "LAST_MAN_RUN",
+      "LAST_MAN_CLOCK",
+      "SURVIVE_FEAR",
+      "ORBIT_KITE",
+      "FEAR_RIDGE",
+      "SHADOW_PREY"
+    ]
+  },
+  "explore": {
+    "prefer_weight": 0.65,
+    "new_card_floor": 0.22,
+    "append_prefer_after_games": 24,
+    "append_prefer_min_wr": 0.28
+  }
+}

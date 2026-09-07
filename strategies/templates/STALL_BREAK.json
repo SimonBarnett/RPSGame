@@ -1,0 +1,43 @@
+{
+  "id": "STALL_BREAK",
+  "title": "Stall break",
+  "mode": "HUNT",
+  "desc": "Predator answer to LAST_MEAL_STALL: lead intercept + ETA gate so a kiting last group cannot run the clock.",
+  "when": {
+    "states": ["CONTESTED", "CLEAR_HUNT", "OUTNUMBERED"],
+    "priority": 70
+  },
+  "tactics": ["lead_intercept", "clock_eta", "prey_pull", "flock_sep"],
+  "math": ["intercept", "time", "boids"],
+  "movement": [
+    {"fn": "intercept.lead", "blend": 0.7},
+    {"fn": "time.heading", "blend": 0.3}
+  ],
+  "switch": {"hold_frames": 5, "margin": 1.08},
+  "tunables": {
+    "switch.hold_frames": [2, 24, 1],
+    "switch.margin": [0.5, 2.0, 0.05],
+    "when.priority": [1, 120, 4],
+    "predict_lookahead": [8.0, 24.0, 0.5],
+    "near_target_aggro": [1.4, 3.4, 0.05],
+    "clear_finish_speed": [1.0, 1.6, 0.02]
+  },
+  "bounds": {
+    "predict_lookahead": [8.0, 24.0, 0.5],
+    "near_target_aggro": [1.4, 3.4, 0.05],
+    "clear_finish_speed": [1.0, 1.6, 0.02]
+  },
+  "base": {
+    "speed_base": 1.38,
+    "turn_base": 13.0,
+    "size": 20,
+    "late_speed_mult": 1.3,
+    "late_turn_mult": 1.16,
+    "late_count_threshold": 2
+  },
+  "weights": {
+    "predict_lookahead": 16.0,
+    "near_target_aggro": 2.6,
+    "clear_finish_speed": 1.25
+  }
+}

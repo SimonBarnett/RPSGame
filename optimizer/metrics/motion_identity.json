@@ -1,0 +1,28 @@
+{
+  "shares": {
+    "ROCK": 0.275,
+    "PAPER": 0.175,
+    "SCISSORS": 0.55
+  },
+  "n": 40,
+  "games_seen": 8754,
+  "identity": {
+    "ROCK": {
+      "speed_base": 1.0946,
+      "turn_base": 13.7875
+    },
+    "PAPER": {
+      "speed_base": 1.88,
+      "turn_base": 13.0
+    },
+    "SCISSORS": {
+      "speed_base": 1.22,
+      "turn_base": 13.35
+    }
+  },
+  "changes": [
+    "ROCK.speed_base: 1.080 -> 1.095  (motion-balance share=0.275)",
+    "ROCK.turn_base: 13.70 -> 13.79  (motion-balance share=0.275)"
+  ],
+  "overlays_seeded": 45
+}

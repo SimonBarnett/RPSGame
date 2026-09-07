@@ -1,0 +1,186 @@
+{
+  "id": "SCREEN_HUNT",
+  "title": "Screen hunt",
+  "mode": "HUNT",
+  "desc": "Assign SCREEN units to face fear; STRIKE takes isolated prey.",
+  "when": {
+    "states": [
+      "CONTESTED",
+      "OUTNUMBERED"
+    ],
+    "priority": 58
+  },
+  "tactics": [
+    "role_screen",
+    "form_wedge",
+    "fort_cover",
+    "pincer_flank",
+    "fear_flee",
+    "focus_fire"
+  ],
+  "math": [
+    "roles",
+    "form",
+    "cover",
+    "steer"
+  ],
+  "movement": [
+    {
+      "fn": "roles.assign"
+    },
+    {
+      "fn": "form.slot_heading",
+      "shape": "wedge",
+      "blend": 0.4
+    },
+    {
+      "fn": "roles.heading",
+      "blend": 0.45
+    },
+    {
+      "fn": "cover.cover_heading",
+      "blend": 0.25
+    }
+  ],
+  "switch": {
+    "hold_frames": 7,
+    "margin": 1.05
+  },
+  "tunables": {
+    "switch.hold_frames": [
+      2,
+      24,
+      1
+    ],
+    "switch.margin": [
+      0.5,
+      2.0,
+      0.05
+    ],
+    "when.priority": [
+      1,
+      120,
+      4
+    ],
+    "fort_cover_weight": [
+      0.5,
+      1.6,
+      0.04
+    ],
+    "escape_bonus": [
+      0.4,
+      1.4,
+      0.04
+    ],
+    "cohesion_weight": [
+      0.2,
+      1.0,
+      0.03
+    ],
+    "near_target_aggro": [
+      1.2,
+      3.2,
+      0.05
+    ],
+    "pincer_weight": [
+      0.4,
+      1.7,
+      0.04
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "movement[0].weight": [
+      0.0,
+      2.0,
+      0.05
+    ],
+    "movement[1].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[2].blend": [
+      0.0,
+      1.0,
+      0.05
+    ],
+    "movement[3].blend": [
+      0.0,
+      1.0,
+      0.05
+    ]
+  },
+  "bounds": {
+    "fort_cover_weight": [
+      0.5,
+      1.6,
+      0.04
+    ],
+    "escape_bonus": [
+      0.4,
+      1.4,
+      0.04
+    ],
+    "cohesion_weight": [
+      0.2,
+      1.0,
+      0.03
+    ],
+    "near_target_aggro": [
+      1.2,
+      3.2,
+      0.05
+    ],
+    "pincer_weight": [
+      0.4,
+      1.7,
+      0.04
+    ],
+    "predict_lookahead": [
+      8.0,
+      20.0,
+      0.5
+    ],
+    "speed_base": [
+      0.9,
+      1.8,
+      0.02
+    ],
+    "turn_base": [
+      8.0,
+      22.0,
+      0.2
+    ],
+    "size": [
+      16.0,
+      24.0,
+      0.5
+    ],
+    "late_speed_mult": [
+      1.08,
+      1.35,
+      0.02
+    ],
+    "late_turn_mult": [
+      1.08,
+      1.28,
+      0.02
+    ],
+    "late_count_threshold": [
+      1,
+      3,
+      1
+    ]
+  },
+  "base": {
+    "speed_base": 1.3,
+    "turn_base": 13.0,
+    "size": 20,
+    "late_speed_mult": 1.22,
+    "late_turn_mult": 1.16,
+    "late_count_threshold": 2
+  }
+}
