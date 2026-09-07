@@ -51,7 +51,7 @@
   const PARTICLE_RISE_PX = 220;
   const PARTICLE_INTRO_MS = 1100;
   const PARTICLE_STAGGER_MS = 40;
-  const ICON_FILE = { ROCK: 'Rock.png', PAPER: 'Paper.png', SCISSORS: 'Scissors.png' };
+  const ICON_FILE = { ROCK: 'rock.png', PAPER: 'paper.png', SCISSORS: 'scissors.png' };
   const ICONS = { ROCK: null, PAPER: null, SCISSORS: null };
   // config LIGHT_DX/DY + shell Phong z. World-fixed, does not spin with roll.
   const LIGHT = { x: -0.32, y: -0.55, z: 0.76 };
@@ -140,12 +140,27 @@
 
   function loadIcons(base) {
     const root = String(base || './images/').replace(/\/?$/, '/');
-    return Promise.all(Object.keys(ICON_FILE).map((t) => new Promise((res) => {
-      const img = new Image();
-      img.onload = () => { ICONS[t] = img; res(img); };
-      img.onerror = () => res(null);
-      img.src = root + ICON_FILE[t];
-    })));
+    function names(t) {
+      const pascal = ICON_FILE[t];
+      const lower = t.toLowerCase() + '.png';
+      const upper = t + '.png';
+      return [lower, pascal, upper];
+    }
+    function tryLoad(t) {
+      const list = names(t);
+      return new Promise((res) => {
+        let i = 0;
+        function next() {
+          if (i >= list.length) { res(null); return; }
+          const img = new Image();
+          img.onload = () => { ICONS[t] = img; res(img); };
+          img.onerror = () => { i++; next(); };
+          img.src = root + list[i];
+        }
+        next();
+      });
+    }
+    return Promise.all(Object.keys(ICON_FILE).map(tryLoad));
   }
 
   /** Draw the type PNG (or a coloured disc fallback) centred at x,y. */
