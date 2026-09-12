@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 20, gen: 8, games: 9126, at: "2026-09-12 18:53Z", sha: "a14a321" };
+  const BUILD = { n: 21, gen: 8, games: 9150, at: "2026-09-12 19:12Z", sha: "e201e48" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1517,6 +1517,9 @@
         if (fd < p.size * 4.5) { want = flee; mode = 'evade'; }
         else if (fd < p.size * 6.5 && (fd < pd || inPath)) want = blendHeadings(want, flee, 0.65);
       }
+      if (state === 'NEAR_WIPE' && fear && fear.obj && fear.d < p.size * 8) {
+        want = blendHeadings(want, interceptHeading(p, fear.obj, 'lead'), 0.55);
+      }
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
       const eject = packEject(p, particles);
@@ -1577,7 +1580,7 @@
       if (allowConvert == null) allowConvert = true;
       const cNow = counts();
       const typesAlive = (cNow.ROCK > 0 ? 1 : 0) + (cNow.PAPER > 0 ? 1 : 0) + (cNow.SCISSORS > 0 ? 1 : 0);
-      const eatCd = typesAlive <= 2 ? 6 : 10;
+      const eatCd = typesAlive <= 2 ? 4 : 10;
       for (let k = 0; k < particles.length; k++) {
         if (particles[k]._eat_cd > 0) particles[k]._eat_cd--;
       }
@@ -1601,9 +1604,11 @@
           if (!allowConvert) continue;
           const winnerP = aEats ? a : b;
           if ((winnerP._eat_cd || 0) > 0) continue;
-          const hx = Math.sin(winnerP.angle), hy = -Math.cos(winnerP.angle);
-          const face = aEats ? (hx * nx + hy * ny) : (-hx * nx - hy * ny);
-          if (face < 0.25) continue;
+          if (typesAlive > 2) {
+            const hx = Math.sin(winnerP.angle), hy = -Math.cos(winnerP.angle);
+            const face = aEats ? (hx * nx + hy * ny) : (-hx * nx - hy * ny);
+            if (face < 0.25) continue;
+          }
           const loser = aEats ? b : a;
           loser.type = winnerP.type;
           winnerP._eat_cd = eatCd;

@@ -1112,6 +1112,10 @@ def think(world, p, counts, W, H, pad, world_k, forts):
             mode = 'evade'
         elif fd < p.size * 6.5 and (fd < pd or in_path):
             want = blend_headings(want, flee, 0.65)
+    if state == 'NEAR_WIPE' and fear and fear.get('obj') is not None:
+        fd = float(fear.get('d') or 1e9)
+        if fd < p.size * 8:
+            want = blend_headings(want, intercept_heading(p, fear['obj'], 'lead'), 0.55)
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])
@@ -1188,7 +1192,7 @@ def _unstick_friends(particles):
 def collide(world, allow_convert=True):
     particles = world.particles
     types_alive = len({_tname(p) for p in particles})
-    eat_cd = 6 if types_alive <= 2 else 10
+    eat_cd = 4 if types_alive <= 2 else 10
     for p in particles:
         cd = int(getattr(p, '_eat_cd', 0) or 0)
         if cd > 0:
@@ -1222,10 +1226,11 @@ def collide(world, allow_convert=True):
             winner_p = a if a_eats else b
             if int(getattr(winner_p, '_eat_cd', 0) or 0) > 0:
                 continue
-            hx, hy = math.sin(winner_p.angle), -math.cos(winner_p.angle)
-            face = (hx * nx + hy * ny) if a_eats else (-hx * nx - hy * ny)
-            if face < 0.25:
-                continue
+            if types_alive > 2:
+                hx, hy = math.sin(winner_p.angle), -math.cos(winner_p.angle)
+                face = (hx * nx + hy * ny) if a_eats else (-hx * nx - hy * ny)
+                if face < 0.25:
+                    continue
             loser = b if a_eats else a
             lose_was = loser.type
             loser.type = winner_p.type
