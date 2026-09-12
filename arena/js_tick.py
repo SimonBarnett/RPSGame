@@ -22,8 +22,17 @@ DEFAULT_MOTION = {
 }
 WALL_RESTITUTION = 0.72
 PAIR_RESTITUTION = 0.35
+FRIEND_RESTITUTION = 0.28
+PAIR_FRICTION = 0.32
+FRIEND_FRICTION = 0.42
+WALL_FRICTION = 0.40
+FORT_FRICTION = 0.35
+FORT_RESTITUTION = 0.55
 COLLISION_SPEED_KEEP = 0.5
 SEPARATION_SLOP = 0.5
+SLIP_DAMP = 0.18
+SPIN_DAMP = 0.985
+MASS = {'ROCK': 1.35, 'SCISSORS': 1.0, 'PAPER': 0.72}
 FEAR_BUILD = 0.35
 FEAR_DECAY = 0.04
 FEAR_DECAY_FAST = 0.18
@@ -78,12 +87,48 @@ def _snap(v, scale):
     return math.floor(float(v) * scale + 0.5) / scale
 
 
+def _snap_signed(v, scale):
+    v = float(v)
+    if v >= 0:
+        return _snap(v, scale)
+    return -_snap(-v, scale)
+
+
 def snap_pose(p):
     """Kill libm ULP drift so PY/JS stay on the same grid."""
     p.x = _snap(p.x, 1e4)
     p.y = _snap(p.y, 1e4)
     p.angle = _snap(ang_norm(p.angle), 1e6)
-    p.speed = _snap(max(0.0, p.speed), 1e6)
+    _ensure_vel(p)
+    p.vx = _snap_signed(p.vx, 1e4)
+    p.vy = _snap_signed(p.vy, 1e4)
+    p.omega = _snap_signed(p.omega, 1e6)
+    p.speed = _snap(max(0.0, math.hypot(p.vx, p.vy)), 1e6)
+
+
+def _ensure_vel(p):
+    if getattr(p, 'vx', None) is None or getattr(p, 'vy', None) is None:
+        sp = float(getattr(p, 'speed', 0) or 0)
+        p.vx = math.sin(p.angle) * sp
+        p.vy = -math.cos(p.angle) * sp
+    if getattr(p, 'omega', None) is None:
+        p.omega = 0.0
+
+
+def _mass_of(p):
+    sz = float(getattr(p, 'size', 18) or 18)
+    return float(MASS.get(_tname(p), 1.0)) * (sz / 18.0) ** 2
+
+
+def _inertia_of(p, mass=None):
+    sz = float(getattr(p, 'size', 18) or 18)
+    m = _mass_of(p) if mass is None else mass
+    return 0.5 * m * sz * sz
+
+
+def _omega_cross(omega, rx, ry):
+    """ωẑ × r in screen coords (y down): clockwise if omega>0."""
+    return (-omega * ry, omega * rx)
 
 
 def ang_diff(a, b):
@@ -620,38 +665,57 @@ def wall_escape(p, W, H, pad):
     return {'h': math.atan2(fx, -fy), 'w': 0.55 if corner else 0.28}
 
 
+def _apply_plane_impulse(p, nx, ny, rx, ry, e, mu):
+    _ensure_vel(p)
+    mass = _mass_of(p)
+    inertia = _inertia_of(p, mass)
+    ox, oy = _omega_cross(p.omega, rx, ry)
+    vcx, vcy = p.vx + ox, p.vy + oy
+    rel_n = vcx * nx + vcy * ny
+    if rel_n >= 0:
+        return
+    inv_m = 1.0 / max(1e-9, mass)
+    jn = -(1.0 + e) * rel_n / inv_m
+    tx, ty = -ny, nx
+    rel_t = vcx * tx + vcy * ty
+    rxt = rx * ty - ry * tx
+    kt = inv_m + (rxt * rxt) / max(1e-9, inertia)
+    jt = -rel_t / max(1e-9, kt)
+    max_j = mu * abs(jn)
+    if jt > max_j:
+        jt = max_j
+    elif jt < -max_j:
+        jt = -max_j
+    jx = jn * nx + jt * tx
+    jy = jn * ny + jt * ty
+    p.vx += jx * inv_m
+    p.vy += jy * inv_m
+    p.omega += (rx * jy - ry * jx) / max(1e-9, inertia)
+
+
 def bounce_wall(p, W, H):
+    _ensure_vel(p)
     e = WALL_RESTITUTION
-    vx = math.sin(p.angle) * p.speed
-    vy = -math.cos(p.angle) * p.speed
-    bounced = False
+    mu = WALL_FRICTION
     m = p.size + 1
+    r = float(p.size)
     if p.x > W - m:
         p.x = W - m
-        if vx > 0:
-            vx = -vx * e
-            bounced = True
+        _apply_plane_impulse(p, -1.0, 0.0, r, 0.0, e, mu)
     elif p.x < m:
         p.x = m
-        if vx < 0:
-            vx = -vx * e
-            bounced = True
+        _apply_plane_impulse(p, 1.0, 0.0, -r, 0.0, e, mu)
     if p.y > H - m:
         p.y = H - m
-        if vy > 0:
-            vy = -vy * e
-            bounced = True
+        _apply_plane_impulse(p, 0.0, -1.0, 0.0, r, e, mu)
     elif p.y < m:
         p.y = m
-        if vy < 0:
-            vy = -vy * e
-            bounced = True
-    if bounced:
-        p.angle = math.atan2(vx, -vy)
-        p.speed = math.hypot(vx, vy)
+        _apply_plane_impulse(p, 0.0, 1.0, 0.0, -r, e, mu)
+    p.speed = math.hypot(p.vx, p.vy)
 
 
 def bounce_fort(p, forts):
+    _ensure_vel(p)
     for f in forts or ():
         if _fort_scale(f) < 0.85:
             continue
@@ -664,14 +728,50 @@ def bounce_fort(p, forts):
         ny = -math.cos(p.angle + math.pi) if dist < 1e-5 else dy / dist
         p.x = f.x + nx * min_d
         p.y = f.y + ny * min_d
-        vx = math.sin(p.angle) * p.speed
-        vy = -math.cos(p.angle) * p.speed
-        vel_n = vx * nx + vy * ny
-        if vel_n < 0:
-            vx -= (1 + 0.55) * vel_n * nx
-            vy -= (1 + 0.55) * vel_n * ny
-        p.angle = math.atan2(vx, -vy)
-        p.speed = math.hypot(vx, vy)
+        r = float(p.size)
+        _apply_plane_impulse(p, nx, ny, nx * r, ny * r, FORT_RESTITUTION, FORT_FRICTION)
+        p.speed = math.hypot(p.vx, p.vy)
+
+
+def _apply_pair_impulse(a, b, nx, ny, e, mu):
+    _ensure_vel(a)
+    _ensure_vel(b)
+    ra, rb = float(a.size), float(b.size)
+    rax, ray = nx * ra, ny * ra
+    rbx, rby = -nx * rb, -ny * rb
+    aox, aoy = _omega_cross(a.omega, rax, ray)
+    box, boy = _omega_cross(b.omega, rbx, rby)
+    rvx = (a.vx + aox) - (b.vx + box)
+    rvy = (a.vy + aoy) - (b.vy + boy)
+    rel_n = rvx * nx + rvy * ny
+    if rel_n > 0:
+        return
+    ma, mb = _mass_of(a), _mass_of(b)
+    ia, ib = _inertia_of(a, ma), _inertia_of(b, mb)
+    inv_a, inv_b = 1.0 / max(1e-9, ma), 1.0 / max(1e-9, mb)
+    kn = inv_a + inv_b
+    jn = -(1.0 + e) * rel_n / max(1e-9, kn)
+    tx, ty = -ny, nx
+    rel_t = rvx * tx + rvy * ty
+    rxta = rax * ty - ray * tx
+    rxtb = rbx * ty - rby * tx
+    kt = inv_a + inv_b + (rxta * rxta) / max(1e-9, ia) + (rxtb * rxtb) / max(1e-9, ib)
+    jt = -rel_t / max(1e-9, kt)
+    max_j = mu * abs(jn)
+    if jt > max_j:
+        jt = max_j
+    elif jt < -max_j:
+        jt = -max_j
+    jx = jn * nx + jt * tx
+    jy = jn * ny + jt * ty
+    a.vx += jx * inv_a
+    a.vy += jy * inv_a
+    b.vx -= jx * inv_b
+    b.vy -= jy * inv_b
+    a.omega += (rax * jy - ray * jx) / max(1e-9, ia)
+    b.omega += (rbx * jy - rby * jx) / max(1e-9, ib)
+    a.speed = math.hypot(a.vx, a.vy)
+    b.speed = math.hypot(b.vx, b.vy)
 
 
 def voronoi_assign(hunters, preys):
@@ -987,8 +1087,6 @@ def think(world, p, counts, W, H, pad, world_k, forts):
 
 def collide(world, allow_convert=True):
     particles = world.particles
-    W = float(world.width)
-    world_k = min(W, float(world.height)) / 800.0
     for i in range(len(particles)):
         a = particles[i]
         for j in range(i + 1, len(particles)):
@@ -1005,26 +1103,8 @@ def collide(world, allow_convert=True):
             a.y -= ny * push
             b.x += nx * push
             b.y += ny * push
-            v1x = math.sin(a.angle) * a.speed
-            v1y = -math.cos(a.angle) * a.speed
-            v2x = math.sin(b.angle) * b.speed
-            v2y = -math.cos(b.angle) * b.speed
-            vel_n = (v1x - v2x) * nx + (v1y - v2y) * ny
             if same:
-                tx, ty = -ny, nx
-                side1 = 1 if (int(getattr(a, 'id', 0) or 0) & 1) else -1
-                slide = 0.55 if vel_n < -0.05 else 0.30
-
-                def slide_h(angle, side, away):
-                    hx, hy = math.sin(angle), -math.cos(angle)
-                    sx = hx * (1 - slide) + (tx * side + nx * away * 0.35) * slide
-                    sy = hy * (1 - slide) + (ty * side + ny * away * 0.35) * slide
-                    if abs(sx) + abs(sy) < 1e-9:
-                        return angle
-                    return math.atan2(sx, -sy)
-
-                a.angle = slide_h(a.angle, side1, -1)
-                b.angle = slide_h(b.angle, -side1, 1)
+                _apply_pair_impulse(a, b, nx, ny, FRIEND_RESTITUTION, FRIEND_FRICTION)
                 continue
             if not allow_convert:
                 continue
@@ -1033,18 +1113,11 @@ def collide(world, allow_convert=True):
             b_eats = PREY_N[bn] == an
             if not a_eats and not b_eats:
                 continue
-            jimp = -(1 + PAIR_RESTITUTION) * vel_n / 2.0
-            a.angle = math.atan2(v1x + jimp * nx, -(v1y + jimp * ny))
-            b.angle = math.atan2(v2x - jimp * nx, -(v2y - jimp * ny))
+            _apply_pair_impulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION)
             winner_p = a if a_eats else b
             loser = b if a_eats else a
             lose_was = loser.type
             loser.type = winner_p.type
-            wn = _tname(winner_p)
-            mot = DEFAULT_MOTION.get(wn) or {'speed': 1.3}
-            cruise = float(mot['speed']) * CRUISE_MULT * world_k
-            a.speed = cruise * COLLISION_SPEED_KEEP
-            b.speed = cruise * COLLISION_SPEED_KEEP
             try:
                 if hasattr(world, 'metrics') and world.metrics is not None:
                     world.metrics.log_conversion(winner_p, loser, loser_type_before=lose_was)
@@ -1079,6 +1152,7 @@ def step(world, move=True, keep_alive=False):
             p._lock_ttl = None
             p._frames_since_fear = 0
             p._fear_intensity = 0.0
+            _ensure_vel(p)
         if not hasattr(p, 'card'):
             p.card = None
         if not hasattr(p, '_fear_intensity'):
@@ -1101,12 +1175,30 @@ def step(world, move=True, keep_alive=False):
             p.speed = _snap(max(0.0, p.speed), 1e6)
     if move or keep_alive:
         for p in particles:
+            _ensure_vel(p)
+            hx, hy = math.sin(p.angle), -math.cos(p.angle)
+            v_par = p.vx * hx + p.vy * hy
+            px, py = p.vx - v_par * hx, p.vy - v_par * hy
+            dv = float(p.speed or 0) - v_par
+            if dv > 0.12:
+                dv = 0.12
+            elif dv < -0.12:
+                dv = -0.12
+            v_par += dv
+            px *= (1.0 - SLIP_DAMP)
+            py *= (1.0 - SLIP_DAMP)
+            p.vx = v_par * hx + px
+            p.vy = v_par * hy + py
             ox, oy = p.x, p.y
-            p.x += math.sin(p.angle) * p.speed
-            p.y -= math.cos(p.angle) * p.speed
+            p.x += p.vx
+            p.y += p.vy
             dist = math.hypot(p.x - ox, p.y - oy)
+            p.omega *= SPIN_DAMP
+            roll = float(getattr(p, 'roll', 0) or 0) + p.omega
             if dist > 0.15:
-                p.roll = float(getattr(p, 'roll', 0) or 0) + 0.85 * dist / max(4.0, p.size)
+                roll += 0.35 * dist / max(4.0, p.size)
+            p.roll = roll
+            p._roll_angle = roll
             p.x = _snap(p.x, 1e4)
             p.y = _snap(p.y, 1e4)
         collide(world, allow_convert=not winner)

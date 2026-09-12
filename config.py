@@ -63,6 +63,12 @@ class Config:
     MARBLE_ICON_ALPHA = 165
     MARBLE_ROLL_STEP = 12         # degrees – cached roll buckets
     MARBLE_ROLL_GAIN = 1.0        # roll radians = gain * distance / radius
+    # Play clock (js_tick / rps.js) uses MASS + 2D impulse; these are docs.
+    MARBLE_MASS = {'ROCK': 1.35, 'SCISSORS': 1.0, 'PAPER': 0.72}
+    MARBLE_SLIP_DAMP = 0.18
+    MARBLE_SPIN_DAMP = 0.985
+    MARBLE_PAIR_FRICTION = 0.32
+    MARBLE_WALL_FRICTION = 0.40
     # Match the FLAT HUD icons (rock=yellow, paper=blue, scissors=red)
     # Must match the FLAT HUD icons (top→bottom = ROCK, PAPER, SCISSORS)
     MARBLE_COLORS = {

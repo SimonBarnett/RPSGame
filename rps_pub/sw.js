@@ -1,5 +1,5 @@
 /* RPS PWA service worker — cache the shell next to this file. */
-const CACHE = "rps-v2";
+const CACHE = "rps-v3";
 const SHELL = ["./", "./index.html", "./rps.js", "./manifest.webmanifest",
                "./icons/icon-192.png", "./icons/icon-512.png', './images/Rock.png', './images/Paper.png', './images/Scissors.png", "./icons/apple-touch-icon.png"];
 

@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 2, gen: 16, games: 8879, at: "2026-09-12 13:36Z", sha: "0aca8ae" };
+  const BUILD = { n: 3, gen: 16, games: 8879, at: "2026-09-12 13:49Z", sha: "239dab3" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -44,8 +44,17 @@
   };
   const WALL_RESTITUTION = 0.72;
   const PAIR_RESTITUTION = 0.35;
+  const FRIEND_RESTITUTION = 0.28;
+  const PAIR_FRICTION = 0.32;
+  const FRIEND_FRICTION = 0.42;
+  const WALL_FRICTION = 0.40;
+  const FORT_FRICTION = 0.35;
+  const FORT_RESTITUTION = 0.55;
   const COLLISION_SPEED_KEEP = 0.5;
   const SEPARATION_SLOP = 0.5;
+  const SLIP_DAMP = 0.18;
+  const SPIN_DAMP = 0.985;
+  const MASS = { ROCK: 1.35, SCISSORS: 1.0, PAPER: 0.72 };
   const FORT_STAGGER_MS = 90;
   const FORT_INTRO_MS = 900;
   const FORT_OUTRO_MS = 800;
@@ -244,11 +253,96 @@
     return a;
   }
   function snapVal(v, scale) { return Math.floor(v * scale + 0.5) / scale; }
+  function snapSigned(v, scale) {
+    if (v >= 0) return snapVal(v, scale);
+    return -snapVal(-v, scale);
+  }
+  function ensureVel(p) {
+    if (p.vx == null || p.vy == null) {
+      const sp = p.speed || 0;
+      p.vx = Math.sin(p.angle) * sp;
+      p.vy = -Math.cos(p.angle) * sp;
+    }
+    if (p.omega == null) p.omega = 0;
+  }
+  function massOf(p) {
+    const sz = p.size || 18;
+    return (MASS[p.type] || 1) * (sz / 18) * (sz / 18);
+  }
+  function inertiaOf(p, mass) {
+    const sz = p.size || 18;
+    const m = mass == null ? massOf(p) : mass;
+    return 0.5 * m * sz * sz;
+  }
+  function omegaCross(omega, rx, ry) {
+    return { x: -omega * ry, y: omega * rx };
+  }
+  function applyPlaneImpulse(p, nx, ny, rx, ry, e, mu) {
+    ensureVel(p);
+    const mass = massOf(p);
+    const inertia = inertiaOf(p, mass);
+    const o = omegaCross(p.omega, rx, ry);
+    const vcx = p.vx + o.x, vcy = p.vy + o.y;
+    const relN = vcx * nx + vcy * ny;
+    if (relN >= 0) return;
+    const invM = 1 / Math.max(1e-9, mass);
+    const jn = -(1 + e) * relN / invM;
+    const tx = -ny, ty = nx;
+    const relT = vcx * tx + vcy * ty;
+    const rxt = rx * ty - ry * tx;
+    const kt = invM + (rxt * rxt) / Math.max(1e-9, inertia);
+    let jt = -relT / Math.max(1e-9, kt);
+    const maxJ = mu * Math.abs(jn);
+    if (jt > maxJ) jt = maxJ;
+    else if (jt < -maxJ) jt = -maxJ;
+    const jx = jn * nx + jt * tx;
+    const jy = jn * ny + jt * ty;
+    p.vx += jx * invM;
+    p.vy += jy * invM;
+    p.omega += (rx * jy - ry * jx) / Math.max(1e-9, inertia);
+  }
+  function applyPairImpulse(a, b, nx, ny, e, mu) {
+    ensureVel(a); ensureVel(b);
+    const ra = a.size, rb = b.size;
+    const rax = nx * ra, ray = ny * ra;
+    const rbx = -nx * rb, rby = -ny * rb;
+    const ao = omegaCross(a.omega, rax, ray);
+    const bo = omegaCross(b.omega, rbx, rby);
+    const rvx = (a.vx + ao.x) - (b.vx + bo.x);
+    const rvy = (a.vy + ao.y) - (b.vy + bo.y);
+    const relN = rvx * nx + rvy * ny;
+    if (relN > 0) return;
+    const ma = massOf(a), mb = massOf(b);
+    const ia = inertiaOf(a, ma), ib = inertiaOf(b, mb);
+    const invA = 1 / Math.max(1e-9, ma), invB = 1 / Math.max(1e-9, mb);
+    const jn = -(1 + e) * relN / Math.max(1e-9, invA + invB);
+    const tx = -ny, ty = nx;
+    const relT = rvx * tx + rvy * ty;
+    const rxta = rax * ty - ray * tx;
+    const rxtb = rbx * ty - rby * tx;
+    const kt = invA + invB + (rxta * rxta) / Math.max(1e-9, ia) + (rxtb * rxtb) / Math.max(1e-9, ib);
+    let jt = -relT / Math.max(1e-9, kt);
+    const maxJ = mu * Math.abs(jn);
+    if (jt > maxJ) jt = maxJ;
+    else if (jt < -maxJ) jt = -maxJ;
+    const jx = jn * nx + jt * tx;
+    const jy = jn * ny + jt * ty;
+    a.vx += jx * invA; a.vy += jy * invA;
+    b.vx -= jx * invB; b.vy -= jy * invB;
+    a.omega += (rax * jy - ray * jx) / Math.max(1e-9, ia);
+    b.omega += (rbx * jy - rby * jx) / Math.max(1e-9, ib);
+    a.speed = Math.hypot(a.vx, a.vy);
+    b.speed = Math.hypot(b.vx, b.vy);
+  }
   function snapPose(p) {
     p.x = snapVal(p.x, 1e4);
     p.y = snapVal(p.y, 1e4);
     p.angle = snapVal(angNorm(p.angle), 1e6);
-    p.speed = snapVal(Math.max(0, p.speed), 1e6);
+    ensureVel(p);
+    p.vx = snapSigned(p.vx, 1e4);
+    p.vy = snapSigned(p.vy, 1e4);
+    p.omega = snapSigned(p.omega, 1e6);
+    p.speed = snapVal(Math.max(0, Math.hypot(p.vx, p.vy)), 1e6);
   }
   function angDiff(a, b) {
     return Math.atan2(Math.sin(b - a), Math.cos(b - a));
@@ -1086,6 +1180,9 @@
     particles.forEach(function (p) {
       p.speed = (motion[p.type] || DEFAULT_MOTION[p.type]).speed * CRUISE_MULT * 0.1 * worldK;
       p.size = body;
+      p.vx = Math.sin(p.angle) * p.speed;
+      p.vy = -Math.cos(p.angle) * p.speed;
+      p.omega = 0;
       p.roll = 0;
       p.scale = 0;
       p._fear_intensity = 0;
@@ -1105,20 +1202,15 @@
 
     /** Reflect heading (0=up). Corners get an extra aim-to-centre shove. */
     function bounceWall(p) {
-      const e = WALL_RESTITUTION;
-      let vx = Math.sin(p.angle) * p.speed;
-      let vy = -Math.cos(p.angle) * p.speed;
-      let bounced = false;
-      let hitX = false, hitY = false;
+      ensureVel(p);
+      const e = WALL_RESTITUTION, mu = WALL_FRICTION;
       const m = p.size + 1;
-      if (p.x > W - m) { p.x = W - m; if (vx > 0) { vx = -vx * e; bounced = true; hitX = true; } }
-      else if (p.x < m) { p.x = m; if (vx < 0) { vx = -vx * e; bounced = true; hitX = true; } }
-      if (p.y > H - m) { p.y = H - m; if (vy > 0) { vy = -vy * e; bounced = true; hitY = true; } }
-      else if (p.y < m) { p.y = m; if (vy < 0) { vy = -vy * e; bounced = true; hitY = true; } }
-      if (bounced) {
-        p.angle = Math.atan2(vx, -vy);
-        p.speed = Math.hypot(vx, vy);
-      }
+      const r = p.size;
+      if (p.x > W - m) { p.x = W - m; applyPlaneImpulse(p, -1, 0, r, 0, e, mu); }
+      else if (p.x < m) { p.x = m; applyPlaneImpulse(p, 1, 0, -r, 0, e, mu); }
+      if (p.y > H - m) { p.y = H - m; applyPlaneImpulse(p, 0, -1, 0, r, e, mu); }
+      else if (p.y < m) { p.y = m; applyPlaneImpulse(p, 0, 1, 0, -r, e, mu); }
+      p.speed = Math.hypot(p.vx, p.vy);
     }
     function leaveHud(p) {
       const hw = W < 520 ? 56 : 120, hh = W < 520 ? 108 : 210;
@@ -1178,6 +1270,7 @@
       }
     }
     function bounceFort(p) {
+      ensureVel(p);
       for (const f of forts) {
         if ((f.scale || 1) < 0.85) continue;
         const dx = p.x - f.x, dy = p.y - f.y;
@@ -1188,15 +1281,9 @@
         const ny = dist < 1e-5 ? -Math.cos(p.angle + Math.PI) : dy / dist;
         p.x = f.x + nx * minD;
         p.y = f.y + ny * minD;
-        let vx = Math.sin(p.angle) * p.speed;
-        let vy = -Math.cos(p.angle) * p.speed;
-        const velN = vx * nx + vy * ny;
-        if (velN < 0) {
-          vx -= (1 + 0.55) * velN * nx;
-          vy -= (1 + 0.55) * velN * ny;
-        }
-        p.angle = Math.atan2(vx, -vy);
-        p.speed = Math.hypot(vx, vy);
+        const r = p.size;
+        applyPlaneImpulse(p, nx, ny, nx * r, ny * r, FORT_RESTITUTION, FORT_FRICTION);
+        p.speed = Math.hypot(p.vx, p.vy);
       }
     }
     function nearest(p, type) {
@@ -1455,38 +1542,18 @@
           const push = (minD - dist + SEPARATION_SLOP) * (a.type === b.type ? 0.9 : 0.55);
           a.x -= nx * push; a.y -= ny * push;
           b.x += nx * push; b.y += ny * push;
-          const v1x = Math.sin(a.angle) * a.speed, v1y = -Math.cos(a.angle) * a.speed;
-          const v2x = Math.sin(b.angle) * b.speed, v2y = -Math.cos(b.angle) * b.speed;
-          const velN = (v1x - v2x) * nx + (v1y - v2y) * ny;
           if (a.type === b.type) {
-            const tx = -ny, ty = nx;
-            const side1 = (a.id & 1) ? 1 : -1;
-            const slide = velN < -0.05 ? 0.55 : 0.30;
-            function slideH(angle, side, away) {
-              const hx = Math.sin(angle), hy = -Math.cos(angle);
-              const sx = hx * (1 - slide) + (tx * side + nx * away * 0.35) * slide;
-              const sy = hy * (1 - slide) + (ty * side + ny * away * 0.35) * slide;
-              if (Math.abs(sx) + Math.abs(sy) < 1e-9) return angle;
-              return Math.atan2(sx, -sy);
-            }
-            a.angle = slideH(a.angle, side1, -1);
-            b.angle = slideH(b.angle, -side1, 1);
+            applyPairImpulse(a, b, nx, ny, FRIEND_RESTITUTION, FRIEND_FRICTION);
             continue;
           }
           if (!allowConvert) continue;
           const aEats = PREY[a.type] === b.type;
           const bEats = PREY[b.type] === a.type;
           if (!aEats && !bEats) continue;
-          const jimp = -(1 + PAIR_RESTITUTION) * velN / 2;
-          let na = Math.atan2(v1x + jimp * nx, -(v1y + jimp * ny));
-          let nb = Math.atan2(v2x - jimp * nx, -(v2y - jimp * ny));
-          a.angle = na; b.angle = nb;
+          applyPairImpulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION);
           const winnerP = aEats ? a : b;
           const loser = aEats ? b : a;
           loser.type = winnerP.type;
-          const cruise = motion[winnerP.type].speed * CRUISE_MULT * worldK;
-          a.speed = cruise * COLLISION_SPEED_KEEP;
-          b.speed = cruise * COLLISION_SPEED_KEEP;
           if (opts.onSfx) opts.onSfx('collide');
         }
       }
@@ -1510,11 +1577,26 @@
       }
       if (move || keepAlive) {
         for (const p of particles) {
+          ensureVel(p);
+          const hx = Math.sin(p.angle), hy = -Math.cos(p.angle);
+          let vPar = p.vx * hx + p.vy * hy;
+          let px = p.vx - vPar * hx, py = p.vy - vPar * hy;
+          let dv = (p.speed || 0) - vPar;
+          if (dv > 0.12) dv = 0.12;
+          else if (dv < -0.12) dv = -0.12;
+          vPar += dv;
+          px *= (1 - SLIP_DAMP);
+          py *= (1 - SLIP_DAMP);
+          p.vx = vPar * hx + px;
+          p.vy = vPar * hy + py;
           const ox = p.x, oy = p.y;
-          p.x += Math.sin(p.angle) * p.speed;
-          p.y -= Math.cos(p.angle) * p.speed;
+          p.x += p.vx;
+          p.y += p.vy;
           const dist = Math.hypot(p.x - ox, p.y - oy);
-          if (dist > 0.15) p.roll = (p.roll || 0) + 0.85 * dist / Math.max(4, p.size);
+          p.omega *= SPIN_DAMP;
+          let roll = (p.roll || 0) + p.omega;
+          if (dist > 0.15) roll += 0.35 * dist / Math.max(4, p.size);
+          p.roll = roll;
           p.x = snapVal(p.x, 1e4);
           p.y = snapVal(p.y, 1e4);
         }

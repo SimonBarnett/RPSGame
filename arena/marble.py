@@ -47,7 +47,7 @@ def roll_speckle_proj(particle, orbit=0.55):
     Returns (qx, qy, qz, sx, sy) or None.
     """
     heading = float(particle.angle)
-    roll = float(getattr(particle, '_roll_angle', 0.0))
+    roll = float(getattr(particle, '_roll_angle', None) or getattr(particle, 'roll', 0.0) or 0.0)
     hx = math.sin(heading)
     hy = -math.cos(heading)
     # P0 = (0,0,-1). Rodrigues around A=(-hy,hx,0) collapses to:
