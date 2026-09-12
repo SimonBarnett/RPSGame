@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 11, gen: 16, games: 8895, at: "2026-09-12 14:49Z", sha: "4a5d114" };
+  const BUILD = { n: 12, gen: 16, games: 8895, at: "2026-09-12 14:52Z", sha: "7fbcb1f" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1227,7 +1227,7 @@
         else if (p.x >= W - m - 0.5) nx = -1;
         if (p.y <= m + 0.5) ny = 1;
         else if (p.y >= H - m - 0.5) ny = -1;
-        p.angle = angNorm(Math.atan2(nx, -ny) + ((p.id % 7) - 3) * 0.22);
+        p.angle = Math.atan2(nx, -ny);
         p.speed = Math.max(Math.hypot(p.vx, p.vy), 2.8);
         p.vx = Math.sin(p.angle) * p.speed;
         p.vy = -Math.cos(p.angle) * p.speed;
@@ -1541,9 +1541,6 @@
         }
       }
 
-      if (preyN === 0) {
-        want = angNorm(p.angle + ((p.id % 7) - 3) * 0.28);
-      }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
         p.angle = angNorm(p.angle + Math.max(-maxTurn, Math.min(maxTurn, dlt)));
@@ -1602,7 +1599,7 @@
       if (!winner && alive.length <= 1) {
         winner = alive[0] || 'NONE';
       }
-      const playAI = move;
+      const playAI = move && !winner;
       if (playAI || !move) {
         for (const p of particles) {
           think(p, c);

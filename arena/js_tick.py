@@ -754,7 +754,7 @@ def bounce_wall(p, W, H):
             ny = 1.0
         elif p.y >= H - m - 0.5:
             ny = -1.0
-        p.angle = ang_norm(math.atan2(nx, -ny) + ((int(getattr(p, 'id', 0) or 0) % 7) - 3) * 0.22)
+        p.angle = math.atan2(nx, -ny)
         p.speed = max(math.hypot(p.vx, p.vy), 2.8)
         p.vx = math.sin(p.angle) * p.speed
         p.vy = -math.cos(p.angle) * p.speed
@@ -1133,9 +1133,6 @@ def think(world, p, counts, W, H, pad, world_k, forts):
             out = math.atan2(dx, -dy)
             ww = 0.92 if d < r + p.size * 1.8 else 0.5
             want = blend_headings(blend_headings(want, tang, ww), out, 0.28)
-    if prey_n == 0:
-        # Keep swimming; unique fan so they do not pile on centre.
-        want = ang_norm(p.angle + ((int(getattr(p, 'id', 0) or 0) % 7) - 3) * 0.28)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
@@ -1265,7 +1262,7 @@ def step(world, move=True, keep_alive=False):
     if len(alive) <= 1:
         winner = alive[0] if alive else 'NONE'
         world._js_match_over = True
-    play_ai = move
+    play_ai = move and not winner
     world._js_tick_i = int(getattr(world, '_js_tick_i', 0) or 0) + 1
     if play_ai or (not move):
         for p in particles:
