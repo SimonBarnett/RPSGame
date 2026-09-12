@@ -20,14 +20,14 @@ DEFAULT_MOTION = {
     'PAPER': {'speed': 1.76, 'turn': 12.06},
     'SCISSORS': {'speed': 1.33, 'turn': 12.84},
 }
-WALL_RESTITUTION = 0.72
+WALL_RESTITUTION = 0.92
 PAIR_RESTITUTION = 0.35
 FRIEND_RESTITUTION = 0.55
 PAIR_FRICTION = 0.32
 FRIEND_FRICTION = 0.06
-WALL_FRICTION = 0.22
-FORT_FRICTION = 0.35
-FORT_RESTITUTION = 0.55
+WALL_FRICTION = 0.04
+FORT_FRICTION = 0.08
+FORT_RESTITUTION = 0.75
 COLLISION_SPEED_KEEP = 0.5
 SEPARATION_SLOP = 0.5
 SLIP_DAMP = 0.42
@@ -658,43 +658,30 @@ def nearest(p, type_name, particles):
 
 
 def pack_eject(p, particles, W, H):
-    edge = p.size * 5.0
+    edge = p.size * 5.5
     on_edge = p.x < edge or p.x > W - edge or p.y < edge or p.y > H - edge
     if not on_edge:
-        return None
-    n = 0
-    r2 = (p.size * 4.2) ** 2
-    tn = _tname(p)
-    for q in particles:
-        if q is p or _tname(q) != tn:
-            continue
-        dx, dy = q.x - p.x, q.y - p.y
-        if dx * dx + dy * dy < r2:
-            n += 1
-    if n < 3:
         return None
     return heading_to(p.x, p.y, W * 0.5, H * 0.5)
 
 
 def wall_escape(p, W, H, pad):
-    band = p.size * 1.8
-    vx, vy = math.sin(p.angle), -math.cos(p.angle)
+    band = p.size * 4.0
     fx = fy = 0.0
-    if p.x < band and vx < 0:
+    if p.x < band:
         fx += (band - p.x) / band
-    if p.x > W - band and vx > 0:
+    if p.x > W - band:
         fx -= (p.x - (W - band)) / band
-    if p.y < band and vy < 0:
+    if p.y < band:
         fy += (band - p.y) / band
-    if p.y > H - band and vy > 0:
+    if p.y > H - band:
         fy -= (p.y - (H - band)) / band
-    corner = (p.x < band or p.x > W - band) and (p.y < band or p.y > H - band)
-    if corner:
-        fx += (W * 0.5 - p.x) * 0.01
-        fy += (H * 0.5 - p.y) * 0.01
-    if abs(fx) + abs(fy) < 0.08:
+    if abs(fx) + abs(fy) < 0.04:
         return None
-    return {'h': math.atan2(fx, -fy), 'w': 0.55 if corner else 0.28}
+    fx += (W * 0.5 - p.x) * 0.012
+    fy += (H * 0.5 - p.y) * 0.012
+    corner = (p.x < band or p.x > W - band) and (p.y < band or p.y > H - band)
+    return {'h': math.atan2(fx, -fy), 'w': 0.85 if corner else 0.7}
 
 
 def _apply_plane_impulse(p, nx, ny, rx, ry, e, mu):
@@ -731,19 +718,30 @@ def bounce_wall(p, W, H):
     mu = WALL_FRICTION
     m = p.size + 1
     r = float(p.size)
+    hit = False
     if p.x > W - m:
         p.x = W - m
         _apply_plane_impulse(p, -1.0, 0.0, r, 0.0, e, mu)
+        hit = True
     elif p.x < m:
         p.x = m
         _apply_plane_impulse(p, 1.0, 0.0, -r, 0.0, e, mu)
+        hit = True
     if p.y > H - m:
         p.y = H - m
         _apply_plane_impulse(p, 0.0, -1.0, 0.0, r, e, mu)
+        hit = True
     elif p.y < m:
         p.y = m
         _apply_plane_impulse(p, 0.0, 1.0, 0.0, -r, e, mu)
-    p.speed = math.hypot(p.vx, p.vy)
+        hit = True
+    if hit:
+        p.angle = heading_to(p.x, p.y, W * 0.5, H * 0.5)
+        p.speed = max(math.hypot(p.vx, p.vy), 2.8)
+        p.vx = math.sin(p.angle) * p.speed
+        p.vy = -math.cos(p.angle) * p.speed
+    else:
+        p.speed = math.hypot(p.vx, p.vy)
 
 
 def bounce_fort(p, forts):
@@ -762,7 +760,10 @@ def bounce_fort(p, forts):
         p.y = f.y + ny * min_d
         r = float(p.size)
         _apply_plane_impulse(p, nx, ny, nx * r, ny * r, FORT_RESTITUTION, FORT_FRICTION)
-        p.speed = math.hypot(p.vx, p.vy)
+        p.angle = math.atan2(nx, -ny)
+        p.speed = max(math.hypot(p.vx, p.vy), 2.4)
+        p.vx = math.sin(p.angle) * p.speed
+        p.vy = -math.cos(p.angle) * p.speed
 
 
 def _apply_pair_impulse(a, b, nx, ny, e, mu):
@@ -1086,7 +1087,7 @@ def think(world, p, counts, W, H, pad, world_k, forts):
         want = blend_headings(want, we2['h'], we2['w'])
     eject = pack_eject(p, world.particles, W, H)
     if eject is not None:
-        want = blend_headings(want, eject, 0.65)
+        want = blend_headings(want, eject, 0.85)
     near_n = 0
     r5 = (p.size * 5) ** 2
     for q in allies:
@@ -1114,6 +1115,9 @@ def think(world, p, counts, W, H, pad, world_k, forts):
             out = math.atan2(dx, -dy)
             ww = 0.92 if d < r + p.size * 1.8 else 0.5
             want = blend_headings(blend_headings(want, tang, ww), out, 0.28)
+    if prey_n == 0:
+        want = blend_headings(want, heading_to(p.x, p.y, W * 0.5, H * 0.5), 0.55)
+        want = blend_headings(want, desync_heading(p, None), 0.4)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
@@ -1243,7 +1247,7 @@ def step(world, move=True, keep_alive=False):
     if len(alive) <= 1:
         winner = alive[0] if alive else 'NONE'
         world._js_match_over = True
-    play_ai = move and not winner
+    play_ai = move
     world._js_tick_i = int(getattr(world, '_js_tick_i', 0) or 0) + 1
     if play_ai or (not move):
         for p in particles:

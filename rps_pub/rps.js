@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 9, gen: 16, games: 8879, at: "2026-09-12 14:33Z", sha: "3523eb4" };
+  const BUILD = { n: 10, gen: 16, games: 8895, at: "2026-09-12 14:45Z", sha: "d3738cf" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -42,14 +42,14 @@
     WIN: 'WIN',
     FORTS_OUT: 'FORTS_OUT'
   };
-  const WALL_RESTITUTION = 0.72;
+  const WALL_RESTITUTION = 0.92;
   const PAIR_RESTITUTION = 0.35;
   const FRIEND_RESTITUTION = 0.55;
   const PAIR_FRICTION = 0.32;
   const FRIEND_FRICTION = 0.06;
-  const WALL_FRICTION = 0.22;
-  const FORT_FRICTION = 0.35;
-  const FORT_RESTITUTION = 0.55;
+  const WALL_FRICTION = 0.04;
+  const FORT_FRICTION = 0.08;
+  const FORT_RESTITUTION = 0.75;
   const COLLISION_SPEED_KEEP = 0.5;
   const SEPARATION_SLOP = 0.5;
   const SLIP_DAMP = 0.42;
@@ -1216,11 +1216,19 @@
       const e = WALL_RESTITUTION, mu = WALL_FRICTION;
       const m = p.size + 1;
       const r = p.size;
-      if (p.x > W - m) { p.x = W - m; applyPlaneImpulse(p, -1, 0, r, 0, e, mu); }
-      else if (p.x < m) { p.x = m; applyPlaneImpulse(p, 1, 0, -r, 0, e, mu); }
-      if (p.y > H - m) { p.y = H - m; applyPlaneImpulse(p, 0, -1, 0, r, e, mu); }
-      else if (p.y < m) { p.y = m; applyPlaneImpulse(p, 0, 1, 0, -r, e, mu); }
-      p.speed = Math.hypot(p.vx, p.vy);
+      let hit = false;
+      if (p.x > W - m) { p.x = W - m; applyPlaneImpulse(p, -1, 0, r, 0, e, mu); hit = true; }
+      else if (p.x < m) { p.x = m; applyPlaneImpulse(p, 1, 0, -r, 0, e, mu); hit = true; }
+      if (p.y > H - m) { p.y = H - m; applyPlaneImpulse(p, 0, -1, 0, r, e, mu); hit = true; }
+      else if (p.y < m) { p.y = m; applyPlaneImpulse(p, 0, 1, 0, -r, e, mu); hit = true; }
+      if (hit) {
+        p.angle = headingTo(p.x, p.y, W * 0.5, H * 0.5);
+        p.speed = Math.max(Math.hypot(p.vx, p.vy), 2.8);
+        p.vx = Math.sin(p.angle) * p.speed;
+        p.vy = -Math.cos(p.angle) * p.speed;
+      } else {
+        p.speed = Math.hypot(p.vx, p.vy);
+      }
     }
     function leaveHud(p) {
       const hw = W < 520 ? 56 : 120, hh = W < 520 ? 108 : 210;
@@ -1231,37 +1239,23 @@
       p.angle = headingTo(p.x, p.y, W * 0.42, H * 0.58);
     }
     function packEject(p, particles) {
-      const edge = p.size * 5.0;
+      const edge = p.size * 5.5;
       const onEdge = p.x < edge || p.x > W - edge || p.y < edge || p.y > H - edge;
       if (!onEdge) return null;
-      let n = 0;
-      const r2 = (p.size * 4.2) * (p.size * 4.2);
-      for (let i = 0; i < particles.length; i++) {
-        const q = particles[i];
-        if (q === p || q.type !== p.type) continue;
-        const dx = q.x - p.x, dy = q.y - p.y;
-        if (dx * dx + dy * dy < r2) n++;
-      }
-      if (n < 3) return null;
       return headingTo(p.x, p.y, W * 0.5, H * 0.5);
     }
     function wallEscape(p) {
-      // Only peel if we are heading INTO a wall (Python apply_wall_bias).
-      // Always-on peel made a racetrack around the rim.
-      const band = p.size * 1.8;
-      const vx = Math.sin(p.angle), vy = -Math.cos(p.angle);
+      const band = p.size * 4.0;
       let fx = 0, fy = 0;
-      if (p.x < band && vx < 0) fx += (band - p.x) / band;
-      if (p.x > W - band && vx > 0) fx -= (p.x - (W - band)) / band;
-      if (p.y < band && vy < 0) fy += (band - p.y) / band;
-      if (p.y > H - band && vy > 0) fy -= (p.y - (H - band)) / band;
+      if (p.x < band) fx += (band - p.x) / band;
+      if (p.x > W - band) fx -= (p.x - (W - band)) / band;
+      if (p.y < band) fy += (band - p.y) / band;
+      if (p.y > H - band) fy -= (p.y - (H - band)) / band;
+      if (Math.abs(fx) + Math.abs(fy) < 0.04) return null;
+      fx += (W * 0.5 - p.x) * 0.012;
+      fy += (H * 0.5 - p.y) * 0.012;
       const corner = (p.x < band || p.x > W - band) && (p.y < band || p.y > H - band);
-      if (corner) {
-        fx += (W * 0.5 - p.x) * 0.01;
-        fy += (H * 0.5 - p.y) * 0.01;
-      }
-      if (Math.abs(fx) + Math.abs(fy) < 0.08) return null;
-      return { h: Math.atan2(fx, -fy), w: corner ? 0.55 : 0.28 };
+      return { h: Math.atan2(fx, -fy), w: corner ? 0.85 : 0.7 };
     }
     function unstickAll() {
       for (let pass = 0; pass < 2; pass++) {
@@ -1298,7 +1292,10 @@
         p.y = f.y + ny * minD;
         const r = p.size;
         applyPlaneImpulse(p, nx, ny, nx * r, ny * r, FORT_RESTITUTION, FORT_FRICTION);
-        p.speed = Math.hypot(p.vx, p.vy);
+        p.angle = Math.atan2(nx, -ny);
+        p.speed = Math.max(Math.hypot(p.vx, p.vy), 2.4);
+        p.vx = Math.sin(p.angle) * p.speed;
+        p.vy = -Math.cos(p.angle) * p.speed;
       }
     }
     function nearest(p, type) {
@@ -1504,7 +1501,7 @@
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
       const eject = packEject(p, particles);
-      if (eject != null) want = blendHeadings(want, eject, 0.65);
+      if (eject != null) want = blendHeadings(want, eject, 0.85);
       let nearN = 0;
       const r5 = (p.size * 5) * (p.size * 5);
       for (let ai = 0; ai < allies.length; ai++) {
@@ -1536,6 +1533,10 @@
         }
       }
 
+      if (preyN === 0) {
+        want = blendHeadings(want, headingTo(p.x, p.y, W * 0.5, H * 0.5), 0.55);
+        want = blendHeadings(want, desyncHeading(p, null), 0.4);
+      }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
         p.angle = angNorm(p.angle + Math.max(-maxTurn, Math.min(maxTurn, dlt)));
@@ -1594,7 +1595,7 @@
       if (!winner && alive.length <= 1) {
         winner = alive[0] || 'NONE';
       }
-      const playAI = move && !winner;
+      const playAI = move;
       if (playAI || !move) {
         for (const p of particles) {
           think(p, c);
