@@ -137,36 +137,32 @@ def episode_return(type_name, winner, duration_s, wipe_by_type,
     won = 1.0 if str(winner or '').upper() == type_name else 0.0
     wiped = _num((wipe_by_type or {}).get(type_name, 0)) > 0
     sc = _dur_scale()
-    wipe_short = 22.0 * sc
-    dur_center = 24.0 * sc
-    dur_span = max(2.0, 16.0 * sc)
+    sc = max(0.55, sc)
+    wipe_short = 10.0
+    dur_center = 18.0
+    dur_span = 12.0
 
-    # 1. Win
+    # 1. Win, but not a 3-second blob melt
     G = 1.15 * won
+    if won and dur < 8.0:
+        G -= 0.85
 
-    # 2. Last-meal discipline. Duration is the proxy: short + wipe = disaster.
+    # 2. Not-losing: longer match is always good.
+    G += 0.55 * math.tanh((dur - dur_center) / dur_span)
     if wiped:
         G -= 2.80
         G -= 0.55 * max(0.0, (wipe_short - dur) / max(1e-6, wipe_short))
-        G -= 0.25 * won          # a win that came from popping last prey is not a win
+        G -= 0.25 * won
     else:
-        G += 0.40 * math.tanh((dur - dur_center) / dur_span)
         occ = _state_occupancy(state_ticks, type_name)
         care = occ.get('LAST_PREY_RISK', 0.0)
         total = sum(occ.values()) or 1.0
         if care / total > 0.06:
             G += 0.22
 
-    # 3. Endgame role split
-    hunter = (endgame_hunter.name if hasattr(endgame_hunter, 'name')
-              else str(endgame_hunter or '')).upper()
-    if eg > 0.4 * sc:
-        if hunter == type_name:
-            # Predator: shorter finish is better
-            G += 0.35 * math.tanh((8.0 * sc - eg) / max(1.5, 7.0 * sc))
-        elif won == 0.0:
-            # Prey being cleaned: longer evade is better
-            G += 0.35 * math.tanh((eg - 14.0 * sc) / max(2.0, 10.0 * sc))
+    # 3. Long endgame rallies are good for hunter and prey.
+    if eg > 0.4:
+        G += 0.30 * math.tanh((eg - 6.0) / 8.0)
 
     return max(-5.0, min(4.0, G))
 

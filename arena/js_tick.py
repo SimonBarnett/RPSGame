@@ -1174,6 +1174,12 @@ def _unstick_friends(particles):
 
 def collide(world, allow_convert=True):
     particles = world.particles
+    types_alive = len({_tname(p) for p in particles})
+    eat_cd = 6 if types_alive <= 2 else 10
+    for p in particles:
+        cd = int(getattr(p, '_eat_cd', 0) or 0)
+        if cd > 0:
+            p._eat_cd = cd - 1
     for i in range(len(particles)):
         a = particles[i]
         for j in range(i + 1, len(particles)):
@@ -1201,9 +1207,16 @@ def collide(world, allow_convert=True):
             if not allow_convert:
                 continue
             winner_p = a if a_eats else b
+            if int(getattr(winner_p, '_eat_cd', 0) or 0) > 0:
+                continue
+            hx, hy = math.sin(winner_p.angle), -math.cos(winner_p.angle)
+            face = (hx * nx + hy * ny) if a_eats else (-hx * nx - hy * ny)
+            if face < 0.25:
+                continue
             loser = b if a_eats else a
             lose_was = loser.type
             loser.type = winner_p.type
+            winner_p._eat_cd = eat_cd
             W = float(getattr(world, 'width', 800) or 800)
             H = float(getattr(world, 'height', 600) or 600)
             world_k = min(W, H) / 800.0

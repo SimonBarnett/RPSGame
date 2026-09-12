@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 12, gen: 16, games: 8895, at: "2026-09-12 14:52Z", sha: "7fbcb1f" };
+  const BUILD = { n: 13, gen: 16, games: 8895, at: "2026-09-12 14:59Z", sha: "48c9e0a" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1561,6 +1561,12 @@
     /** Convert-on-contact (RPS) or same-type separate. Collisions halve speed. */
     function collide(allowConvert) {
       if (allowConvert == null) allowConvert = true;
+      const cNow = counts();
+      const typesAlive = (cNow.ROCK > 0 ? 1 : 0) + (cNow.PAPER > 0 ? 1 : 0) + (cNow.SCISSORS > 0 ? 1 : 0);
+      const eatCd = typesAlive <= 2 ? 6 : 10;
+      for (let k = 0; k < particles.length; k++) {
+        if (particles[k]._eat_cd > 0) particles[k]._eat_cd--;
+      }
       for (let i = 0; i < particles.length; i++) {
         const a = particles[i];
         for (let j = i + 1; j < particles.length; j++) {
@@ -1580,8 +1586,13 @@
           applyPairImpulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION);
           if (!allowConvert) continue;
           const winnerP = aEats ? a : b;
+          if ((winnerP._eat_cd || 0) > 0) continue;
+          const hx = Math.sin(winnerP.angle), hy = -Math.cos(winnerP.angle);
+          const face = aEats ? (hx * nx + hy * ny) : (-hx * nx - hy * ny);
+          if (face < 0.25) continue;
           const loser = aEats ? b : a;
           loser.type = winnerP.type;
+          winnerP._eat_cd = eatCd;
           const keep = (motion[winnerP.type] || DEFAULT_MOTION[winnerP.type]).speed * CRUISE_MULT * worldK * COLLISION_SPEED_KEEP;
           a.speed = keep; b.speed = keep;
           a.vx = Math.sin(a.angle) * keep; a.vy = -Math.cos(a.angle) * keep;

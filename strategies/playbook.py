@@ -1512,6 +1512,9 @@ def credit_decisions(match):
                 state_bag = {}
             short_n = sum(int(v or 0) for k, v in state_bag.items() if str(k) in SHORT_STATES)
             credited = (n >= 1) if (care or short_n >= 1) else (n >= MIN_CREDIT and share >= MIN_SHARE)
+            dur = float(match.get('duration_s') or 0)
+            dur_bonus = 0.35 * math.tanh((dur - 18.0) / 12.0)
+            fast_wipe = dur < 8.0 and tname == winner
             if not credited:
                 st['glimpse'] = int(st.get('glimpse') or 0) + 1
                 payoff = -0.02
@@ -1519,14 +1522,19 @@ def credit_decisions(match):
                 st['games'] = int(st['games']) + 1
                 if care:
                     clean = tname not in type_blunder
-                    payoff = 0.15 * share + (0.28 if clean else -0.40)
+                    payoff = 0.15 * share + (0.28 if clean else -0.40) + dur_bonus
                 else:
                     if tname == winner:
-                        st['wins'] = float(st.get('wins') or 0) + share
-                        st['alpha'] = float(st.get('alpha') or 1.0) + share
+                        if fast_wipe:
+                            st['beta'] = float(st.get('beta') or 1.0) + share
+                            payoff = -0.15 + dur_bonus
+                        else:
+                            st['wins'] = float(st.get('wins') or 0) + share
+                            st['alpha'] = float(st.get('alpha') or 1.0) + share
+                            payoff = share + dur_bonus
                     else:
                         st['beta'] = float(st.get('beta') or 1.0) + share
-                    payoff = (share if tname == winner else -0.25 * share)
+                        payoff = -0.25 * share + dur_bonus
                     if int(st.get('last_prey_blunder') or 0):
                         st['beta'] = float(st.get('beta') or 1.0) + 0.4
             st['ema'] = (1.0 - EMA) * float(st.get('ema') or 0) + EMA * payoff
