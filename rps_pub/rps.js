@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 14, gen: 16, games: 8895, at: "2026-09-12 15:05Z", sha: "4e3ad7a" };
+  const BUILD = { n: 15, gen: 15, games: 8910, at: "2026-09-12 15:15Z", sha: "79586a3" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1632,7 +1632,7 @@
         p.angle = (idx % 2 === 0) ? (Math.PI * 0.5) : (Math.PI * 1.5);
         p.speed = cruise * (1.0 + 0.25 * Math.sin(tick * 0.22 + idx * 0.7));
       } else {
-        const mate = n > 1 ? ordered[idx ^ 1] : p;
+        const mate = n > 1 ? ordered[(idx ^ 1) % n] : p;
         if (beat < 9) {
           p.angle = headingTo(p.x, p.y, mate.x, mate.y);
           p.speed = cruise * 1.15;

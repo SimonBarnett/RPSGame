@@ -1280,7 +1280,7 @@ def victory_steer(p, particles, dance, tick, W, H, world_k, charge_ang):
         p.angle = (math.pi * 0.5) if (idx % 2 == 0) else (math.pi * 1.5)
         p.speed = cruise * (1.0 + 0.25 * math.sin(tick * 0.22 + idx * 0.7))
     else:
-        mate = ordered[idx ^ 1] if n > 1 else p
+        mate = ordered[(idx ^ 1) % n] if n > 1 else p
         if beat < 9:
             p.angle = heading_to(p.x, p.y, mate.x, mate.y)
             p.speed = cruise * 1.15

@@ -22,7 +22,7 @@
 <body>
   <div id="rps"></div>
   <div id="rps-err"></div>
-  <script src="./rps.js?v=14" onerror="document.getElementById('rps-err').style.display='block';document.getElementById('rps-err').textContent='rps.js failed to load. Put rps.js next to this HTML.';"></script>
+  <script src="./rps.js?v=15" onerror="document.getElementById('rps-err').style.display='block';document.getElementById('rps-err').textContent='rps.js failed to load. Put rps.js next to this HTML.';"></script>
   <script>
     function showErr(e) {
       var el = document.getElementById("rps-err");
@@ -35,7 +35,7 @@
       if (p && p.catch) p.catch(showErr);
     } catch (e) { showErr(e); }
     if (location.protocol !== "file:" && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js?v=14").catch(function(){});
+      navigator.serviceWorker.register("./sw.js?v=15").catch(function(){});
     }
   </script>
 </body>
