@@ -1103,11 +1103,14 @@ def think(world, p, counts, W, H, pad, world_k, forts):
     # Never drive into a predator (NEAR_WIPE body-check may still intercept).
     if fear and fear.get('obj') is not None and state != 'NEAR_WIPE':
         fd = float(fear.get('d') or 1e9)
-        flee = ang_norm(heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y) + math.pi)
+        fear_h = heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y)
+        flee = ang_norm(fear_h + math.pi)
+        pd = float(prey['d']) if prey and prey.get('obj') is not None else 1e9
+        in_path = abs(ang_diff(want if want is not None else p.angle, fear_h)) < 0.9
         if fd < p.size * 4.5:
             want = flee
             mode = 'evade'
-        elif fd < p.size * 8.5:
+        elif fd < pd or (in_path and fd < pd + p.size * 2):
             want = blend_headings(want, flee, 0.7)
     we2 = wall_escape(p, W, H, pad)
     if we2:

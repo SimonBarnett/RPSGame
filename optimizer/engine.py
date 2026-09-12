@@ -3597,6 +3597,23 @@ class StrategyOptimizer:
                 picked.append((sid, ov))
                 seen.add(sid)
                 self._log_raw('GP-EI rescue %s.%s y=%.3f' % (tname, sid, rescue[0][0]))
+            if tname in explore:
+                hunt_best = None
+                hunt_wr = -1.0
+                for sid in ('CLEAR_SPLIT', 'SCREEN_HUNT', 'OPEN_KITE', 'PACK_HUNT'):
+                    ov = bag.get(sid)
+                    if not ov:
+                        continue
+                    st = (ov.get('stats') or {})
+                    g = float(st.get('games') or 0)
+                    wr = (float(st.get('wins') or 0) / g) if g > 4 else -1.0
+                    if wr > hunt_wr:
+                        hunt_wr = wr
+                        hunt_best = (sid, ov)
+                if hunt_best and hunt_best[0] not in seen:
+                    picked.append(hunt_best)
+                    seen.add(hunt_best[0])
+                    self._log_raw('GP-EI hunt %s.%s wr=%.3f' % (tname, hunt_best[0], hunt_wr))
             for _, _, sid, ov in played:
                 if sid in seen:
                     continue

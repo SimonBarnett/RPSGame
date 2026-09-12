@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 18, gen: 16, games: 8954, at: "2026-09-12 15:53Z", sha: "a91bcc1" };
+  const BUILD = { n: 19, gen: 8, games: 9054, at: "2026-09-12 17:17Z", sha: "a98881f" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1510,9 +1510,12 @@
       if (mode === 'evade') want = angNorm(want + ((p.id % 7) - 3) * 0.2);
       if (fear && fear.obj && state !== 'NEAR_WIPE') {
         const fd = fear.d;
-        const flee = angNorm(headingTo(p.x, p.y, fear.obj.x, fear.obj.y) + Math.PI);
+        const fearH = headingTo(p.x, p.y, fear.obj.x, fear.obj.y);
+        const flee = angNorm(fearH + Math.PI);
+        const pd = (prey && prey.obj) ? prey.d : 1e9;
+        const inPath = Math.abs(angDiff(want != null ? want : p.angle, fearH)) < 0.9;
         if (fd < p.size * 4.5) { want = flee; mode = 'evade'; }
-        else if (fd < p.size * 8.5) want = blendHeadings(want, flee, 0.7);
+        else if (fd < pd || (inPath && fd < pd + p.size * 2)) want = blendHeadings(want, flee, 0.7);
       }
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
