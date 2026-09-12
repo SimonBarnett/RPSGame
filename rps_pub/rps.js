@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 6, gen: 16, games: 8879, at: "2026-09-12 14:09Z", sha: "c0708b7" };
+  const BUILD = { n: 7, gen: 16, games: 8879, at: "2026-09-12 14:21Z", sha: "ee7ab82" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -453,7 +453,7 @@
     NO_PREY_FEAR_ALIVE: ['SURVIVE_FEAR', 'ORBIT_KITE', 'SHADOW_PREY', 'HOLD_COVER'],
     OUTNUMBERED: ['GIVE_GROUND', 'HOLD_COVER', 'SHADOW_PREY'],
     SMALL_UNIT: ['SCATTER_RAID', 'OPEN_KITE', 'SCREEN_HUNT'],
-    CONTESTED: ['PACK_HUNT', 'SCREEN_HUNT', 'OPEN_KITE', 'ESCORT_RING']
+    CONTESTED: ['SCREEN_HUNT', 'OPEN_KITE', 'LANE_SWEEP', 'PACK_HUNT']
   };
   /** Play-only pick from JSON. Learning (UCB / Thompson / EI) stays in Python. */
 
@@ -510,7 +510,7 @@
   }
 
   const DEFAULT_CARDS = {
-    PACK_HUNT: { movement: [{fn:'sectors.orient',blend:0.35},{fn:'boids.desired_heading',blend:0.45},{fn:'intercept.heading',blend:0.4}] },
+    PACK_HUNT: { movement: [{fn:'sectors.orient',blend:0.35},{fn:'desync.heading',blend:0.35},{fn:'intercept.heading',blend:0.4},{fn:'lanes.heading',blend:0.3}] },
     SCREEN_HUNT: { movement: [{fn:'sectors.orient',blend:0.4},{fn:'boids.desired_heading',blend:0.35},{fn:'lanes.heading',blend:0.3}] },
     OPEN_KITE: { movement: [{fn:'orbit.heading',blend:0.45},{fn:'sectors.orient',blend:0.3}] },
     ESCORT_RING: { movement: [{fn:'form.slot_heading',blend:0.4},{fn:'boids.desired_heading',blend:0.3}] },
@@ -764,7 +764,8 @@
     const preyObj = prey && (prey.obj || prey);
     const fearObj = fear && (fear.obj || fear);
     // Hunt > flock. Cohesion is what made colour-ghettos in the screenshots.
-    if (nCoh && nSep < 2 && !preyObj && state !== 'CLEAR_HUNT' && state !== 'LAST_MAN') {
+    if (nCoh && nSep < 2 && !preyObj && state !== 'CLEAR_HUNT' && state !== 'LAST_MAN'
+        && state !== 'CONTESTED' && state !== 'SMALL_UNIT') {
       fx += ((cx / nCoh) - p.x) * 0.002;
       fy += ((cy / nCoh) - p.y) * 0.002;
     }
@@ -1502,6 +1503,17 @@
       if (mode === 'evade') want = angNorm(want + ((p.id % 7) - 3) * 0.2);
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
+      const eject = packEject(p, particles);
+      if (eject != null) want = blendHeadings(want, eject, 0.45);
+      let nearN = 0;
+      const r5 = (p.size * 5) * (p.size * 5);
+      for (let ai = 0; ai < allies.length; ai++) {
+        const q = allies[ai];
+        if (q === p) continue;
+        const dx = q.x - p.x, dy = q.y - p.y;
+        if (dx * dx + dy * dy < r5) nearN++;
+      }
+      if (nearN >= 3) want = blendHeadings(want, desyncHeading(p, prey && prey.obj), 0.3);
 
       // evasion brake / reverse (Python apply_evasion, compact)
       if (mode === 'evade' && fear && fear.d < p.size * 6) {
@@ -1557,11 +1569,13 @@
           a.x -= nx * push; a.y -= ny * push;
           b.x += nx * push; b.y += ny * push;
           if (a.type === b.type) continue;
-          if (!allowConvert) continue;
           const aEats = PREY[a.type] === b.type;
           const bEats = PREY[b.type] === a.type;
           if (!aEats && !bEats) continue;
+          ensureVel(a); ensureVel(b);
+          const relN = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
           applyPairImpulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION);
+          if (!allowConvert || relN < 0.12) continue;
           const winnerP = aEats ? a : b;
           const loser = aEats ? b : a;
           loser.type = winnerP.type;

@@ -299,7 +299,8 @@ def swarm_heading(p, particles, state, prey, fear, w=None):
     fear_obj = getattr(fear, 'obj', fear) if fear is not None else None
     if isinstance(fear, dict):
         fear_obj = fear.get('obj')
-    if n_coh and n_sep < 2 and prey_obj is None and state not in ('CLEAR_HUNT', 'LAST_MAN'):
+    if n_coh and n_sep < 2 and prey_obj is None and state not in (
+            'CLEAR_HUNT', 'LAST_MAN', 'CONTESTED', 'SMALL_UNIT'):
         fx += ((cx / n_coh) - p.x) * 0.002
         fy += ((cy / n_coh) - p.y) * 0.002
     if fear_obj is not None and state != 'CLEAR_HUNT':
@@ -654,6 +655,25 @@ def nearest(p, type_name, particles):
         if d2 < best_d and d2 <= cap:
             best_d, best = d2, q
     return {'obj': best, 'd': math.sqrt(best_d)} if best is not None else None
+
+
+def pack_eject(p, particles, W, H):
+    edge = p.size * 3.2
+    on_edge = p.x < edge or p.x > W - edge or p.y < edge or p.y > H - edge
+    if not on_edge:
+        return None
+    n = 0
+    r2 = (p.size * 4.2) ** 2
+    tn = _tname(p)
+    for q in particles:
+        if q is p or _tname(q) != tn:
+            continue
+        dx, dy = q.x - p.x, q.y - p.y
+        if dx * dx + dy * dy < r2:
+            n += 1
+    if n < 3:
+        return None
+    return heading_to(p.x, p.y, W * 0.5, H * 0.5)
 
 
 def wall_escape(p, W, H, pad):
@@ -1064,6 +1084,19 @@ def think(world, p, counts, W, H, pad, world_k, forts):
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])
+    eject = pack_eject(p, world.particles, W, H)
+    if eject is not None:
+        want = blend_headings(want, eject, 0.45)
+    near_n = 0
+    r5 = (p.size * 5) ** 2
+    for q in allies:
+        if q is p:
+            continue
+        dx, dy = q.x - p.x, q.y - p.y
+        if dx * dx + dy * dy < r5:
+            near_n += 1
+    if near_n >= 3:
+        want = blend_headings(want, desync_heading(p, prey['obj'] if prey else None), 0.3)
     if mode == 'evade' and fear and fear['d'] < p.size * 6:
         ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y)))
         if ahead < 0.6:
@@ -1140,14 +1173,17 @@ def collide(world, allow_convert=True):
             b.y += ny * push
             if same:
                 continue
-            if not allow_convert:
-                continue
             an, bn = _tname(a), _tname(b)
-            a_eats = PREY_N[an] == bn
-            b_eats = PREY_N[bn] == an
+            a_eats = PREY_N.get(an) == bn
+            b_eats = PREY_N.get(bn) == an
             if not a_eats and not b_eats:
                 continue
+            _ensure_vel(a)
+            _ensure_vel(b)
+            rel_n = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny
             _apply_pair_impulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION)
+            if (not allow_convert) or rel_n < 0.12:
+                continue
             winner_p = a if a_eats else b
             loser = b if a_eats else a
             lose_was = loser.type

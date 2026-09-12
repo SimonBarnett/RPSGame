@@ -25,24 +25,10 @@
     "pressure"
   ],
   "movement": [
-    {
-      "fn": "sectors.orient",
-      "weight": 1.0
-    },
-    {
-      "fn": "boids.desired_heading",
-      "blend": 0.45,
-      "when": "chase"
-    },
-    {
-      "fn": "steer.pincer_heading",
-      "blend": 0.35,
-      "when": "chase"
-    },
-    {
-      "fn": "pressure.heading",
-      "blend": 0.25
-    }
+    {"fn": "sectors.orient", "blend": 0.35},
+    {"fn": "desync.heading", "blend": 0.35},
+    {"fn": "intercept.heading", "blend": 0.4},
+    {"fn": "lanes.heading", "blend": 0.3}
   ],
   "switch": {
     "hold_frames": 8,
