@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 21, gen: 8, games: 9150, at: "2026-09-12 19:12Z", sha: "e201e48" };
+  const BUILD = { n: 22, gen: 8, games: 9206, at: "2026-09-12 20:04Z", sha: "9e3020d" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -969,9 +969,26 @@
       else members[i]._role = (i % 2 ? 'STRIKE' : 'BAIT');
     }
   }
-  function rolesHeading(p, prey, fear) {
+  function rolesHeading(p, prey, fear, allies) {
     const role = p._role || 'STRIKE';
-    if (role === 'SCREEN' && fear) return headingTo(p.x, p.y, fear.x, fear.y);
+    if (role === 'SCREEN' && fear) {
+      const fd = Math.hypot(p.x - fear.x, p.y - fear.y);
+      if (fd < p.size * 4.5) return angNorm(headingTo(p.x, p.y, fear.x, fear.y) + Math.PI);
+      const list = allies || [];
+      let cx = p.x, cy = p.y;
+      if (list.length) {
+        cx = 0; cy = 0;
+        for (let i = 0; i < list.length; i++) { cx += list[i].x; cy += list[i].y; }
+        cx /= list.length; cy /= list.length;
+      }
+      let tx = cx + 0.7 * (fear.x - cx);
+      let ty = cy + 0.7 * (fear.y - cy);
+      let dx = tx - fear.x, dy = ty - fear.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const minD = p.size * 5;
+      if (d < minD) { tx = fear.x + dx / d * minD; ty = fear.y + dy / d * minD; }
+      return headingTo(p.x, p.y, tx, ty);
+    }
     if (role === 'BAIT' && prey) return orbitHeading(p, prey, p.size * 6);
     if (role === 'ESCORT' && prey) return headingTo(p.x, p.y, prey.x, prey.y);
     return prey ? chaseHeading(p, prey, 12) : null;
@@ -1015,7 +1032,7 @@
     }
     function resolve(fn) {
       if (fn === 'flow.heading' || fn === 'flow.force') return flowHeading(p, ctx.W, ctx.H, ctx.forts);
-      if (fn === 'roles.heading') return rolesHeading(p, prey, fear);
+      if (fn === 'roles.heading') return rolesHeading(p, prey, fear, ctx.allies);
       if (fn === 'roles.assign') { rolesAssign(ctx.allies || [], FEAR[p.type]); return null; }
       if (fn === 'form.slot_heading') return formHeading(p, ctx.allies || [], prey);
       if (fn === 'orbit.heading') return orbitHeading(p, prey || fear, null);

@@ -508,10 +508,27 @@ def roles_assign(members):
             m._role = 'STRIKE' if i % 2 else 'BAIT'
 
 
-def roles_heading(p, prey, fear):
+def roles_heading(p, prey, fear, allies=None):
     role = getattr(p, '_role', None) or 'STRIKE'
     if role == 'SCREEN' and fear is not None:
-        return heading_to(p.x, p.y, fear.x, fear.y)
+        fd = math.hypot(p.x - fear.x, p.y - fear.y)
+        if fd < p.size * 4.5:
+            return ang_norm(heading_to(p.x, p.y, fear.x, fear.y) + math.pi)
+        allies = list(allies or ())
+        if allies:
+            cx = sum(q.x for q in allies) / len(allies)
+            cy = sum(q.y for q in allies) / len(allies)
+        else:
+            cx, cy = p.x, p.y
+        tx = cx + 0.7 * (fear.x - cx)
+        ty = cy + 0.7 * (fear.y - cy)
+        dx, dy = tx - fear.x, ty - fear.y
+        d = math.hypot(dx, dy) or 1.0
+        min_d = p.size * 5.0
+        if d < min_d:
+            tx = fear.x + dx / d * min_d
+            ty = fear.y + dy / d * min_d
+        return heading_to(p.x, p.y, tx, ty)
     if role == 'BAIT' and prey is not None:
         return orbit_heading(p, prey, p.size * 6)
     if role == 'ESCORT' and prey is not None:
@@ -563,7 +580,7 @@ def apply_moves(want, steps, ctx):
         if fn in ('flow.heading', 'flow.force'):
             return flow_heading(p, W, H, forts)
         if fn == 'roles.heading':
-            return roles_heading(p, prey, fear)
+            return roles_heading(p, prey, fear, ctx.get('allies'))
         if fn == 'roles.assign':
             roles_assign(list(ctx.get('allies') or []))
             return None
