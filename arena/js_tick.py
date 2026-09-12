@@ -30,8 +30,9 @@ FORT_FRICTION = 0.35
 FORT_RESTITUTION = 0.55
 COLLISION_SPEED_KEEP = 0.5
 SEPARATION_SLOP = 0.5
-SLIP_DAMP = 0.18
+SLIP_DAMP = 0.42
 SPIN_DAMP = 0.985
+THRUST = 0.22
 MASS = {'ROCK': 1.35, 'SCISSORS': 1.0, 'PAPER': 0.72}
 FEAR_BUILD = 0.35
 FEAR_DECAY = 0.04
@@ -287,9 +288,9 @@ def swarm_heading(p, particles, state, prey, fear, w=None):
             cy += q.y
             n_coh += 1
     fx = fy = 0.0
-    sep_w = 2.8 if state == 'CLEAR_HUNT' else (2.2 if state in ('LAST_MAN', 'NEAR_WIPE') else 1.6)
+    sep_w = 3.4 if state == 'CLEAR_HUNT' else (2.8 if state in ('LAST_MAN', 'NEAR_WIPE') else 2.4)
     if n_sep:
-        m = 2.4 if n_sep >= 4 else (1.8 if n_sep >= 3 else 1.0)
+        m = 3.0 if n_sep >= 3 else 1.6
         fx += sx * sep_w * m
         fy += sy * sep_w * m
     prey_obj = getattr(prey, 'obj', prey) if prey is not None else None
@@ -298,7 +299,7 @@ def swarm_heading(p, particles, state, prey, fear, w=None):
     fear_obj = getattr(fear, 'obj', fear) if fear is not None else None
     if isinstance(fear, dict):
         fear_obj = fear.get('obj')
-    if n_coh and n_sep < 4 and prey_obj is None and state not in ('CLEAR_HUNT', 'LAST_MAN'):
+    if n_coh and n_sep < 2 and prey_obj is None and state not in ('CLEAR_HUNT', 'LAST_MAN'):
         fx += ((cx / n_coh) - p.x) * 0.002
         fy += ((cy / n_coh) - p.y) * 0.002
     if fear_obj is not None and state != 'CLEAR_HUNT':
@@ -1089,33 +1090,34 @@ def think(world, p, counts, W, H, pad, world_k, forts):
     if mode == 'chase' and state == 'CLEAR_HUNT':
         target_sp = cruise * 1.18
     if p.speed < target_sp:
-        p.speed += min(0.12, target_sp - p.speed)
+        p.speed += min(THRUST, target_sp - p.speed)
     else:
-        p.speed += (target_sp - p.speed) * 0.12
+        p.speed += (target_sp - p.speed) * THRUST
     if p.speed > cruise * 1.35:
         p.speed = cruise * 1.35
 
 
 def _unstick_friends(particles):
-    for i in range(len(particles)):
-        p = particles[i]
-        min_d = p.size * 2.15
-        min_d2 = min_d * min_d
-        for j in range(i + 1, len(particles)):
-            q = particles[j]
-            if p.type != q.type:
-                continue
-            dx, dy = p.x - q.x, p.y - q.y
-            d2 = dx * dx + dy * dy
-            if d2 >= min_d2 or d2 < 1e-8:
-                continue
-            d = math.sqrt(d2)
-            push = (min_d - d) * 0.5
-            nx, ny = dx / d, dy / d
-            p.x += nx * push
-            p.y += ny * push
-            q.x -= nx * push
-            q.y -= ny * push
+    for _pass in range(2):
+        for i in range(len(particles)):
+            p = particles[i]
+            min_d = p.size * 2.55
+            min_d2 = min_d * min_d
+            for j in range(i + 1, len(particles)):
+                q = particles[j]
+                if p.type != q.type:
+                    continue
+                dx, dy = p.x - q.x, p.y - q.y
+                d2 = dx * dx + dy * dy
+                if d2 >= min_d2 or d2 < 1e-8:
+                    continue
+                d = math.sqrt(d2)
+                push = (min_d - d) * 0.85
+                nx, ny = dx / d, dy / d
+                p.x += nx * push
+                p.y += ny * push
+                q.x -= nx * push
+                q.y -= ny * push
 
 
 def collide(world, allow_convert=True):
@@ -1137,7 +1139,6 @@ def collide(world, allow_convert=True):
             b.x += nx * push
             b.y += ny * push
             if same:
-                _apply_pair_impulse(a, b, nx, ny, FRIEND_RESTITUTION, FRIEND_FRICTION)
                 continue
             if not allow_convert:
                 continue
@@ -1213,10 +1214,10 @@ def step(world, move=True, keep_alive=False):
             v_par = p.vx * hx + p.vy * hy
             px, py = p.vx - v_par * hx, p.vy - v_par * hy
             dv = float(p.speed or 0) - v_par
-            if dv > 0.12:
-                dv = 0.12
-            elif dv < -0.12:
-                dv = -0.12
+            if dv > THRUST:
+                dv = THRUST
+            elif dv < -THRUST:
+                dv = -THRUST
             v_par += dv
             px *= (1.0 - SLIP_DAMP)
             py *= (1.0 - SLIP_DAMP)

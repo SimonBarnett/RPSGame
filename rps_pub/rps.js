@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 5, gen: 16, games: 8879, at: "2026-09-12 14:02Z", sha: "23b87ad" };
+  const BUILD = { n: 6, gen: 16, games: 8879, at: "2026-09-12 14:09Z", sha: "c0708b7" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -52,8 +52,9 @@
   const FORT_RESTITUTION = 0.55;
   const COLLISION_SPEED_KEEP = 0.5;
   const SEPARATION_SLOP = 0.5;
-  const SLIP_DAMP = 0.18;
+  const SLIP_DAMP = 0.42;
   const SPIN_DAMP = 0.985;
+  const THRUST = 0.22;
   const MASS = { ROCK: 1.35, SCISSORS: 1.0, PAPER: 0.72 };
   const FORT_STAGGER_MS = 90;
   const FORT_INTRO_MS = 900;
@@ -755,15 +756,15 @@
       }
     }
     let fx = 0, fy = 0;
-    const sepW = state === 'CLEAR_HUNT' ? 2.8 : ((state === 'LAST_MAN' || state === 'NEAR_WIPE') ? 2.2 : 1.6);
+    const sepW = state === 'CLEAR_HUNT' ? 3.4 : ((state === 'LAST_MAN' || state === 'NEAR_WIPE') ? 2.8 : 2.4);
     if (nSep) {
-      const m = nSep >= 4 ? 2.4 : (nSep >= 3 ? 1.8 : 1);
+      const m = nSep >= 3 ? 3.0 : 1.6;
       fx += sx * sepW * m; fy += sy * sepW * m;
     }
     const preyObj = prey && (prey.obj || prey);
     const fearObj = fear && (fear.obj || fear);
     // Hunt > flock. Cohesion is what made colour-ghettos in the screenshots.
-    if (nCoh && nSep < 4 && !preyObj && state !== 'CLEAR_HUNT' && state !== 'LAST_MAN') {
+    if (nCoh && nSep < 2 && !preyObj && state !== 'CLEAR_HUNT' && state !== 'LAST_MAN') {
       fx += ((cx / nCoh) - p.x) * 0.002;
       fy += ((cy / nCoh) - p.y) * 0.002;
     }
@@ -1262,21 +1263,23 @@
       return { h: Math.atan2(fx, -fy), w: corner ? 0.55 : 0.28 };
     }
     function unstickAll() {
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        const minD = p.size * 2.15;
-        const minD2 = minD * minD;
-        for (let j = i + 1; j < particles.length; j++) {
-          const q = particles[j];
-          if (q.type !== p.type) continue;
-          const dx = p.x - q.x, dy = p.y - q.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 >= minD2 || d2 < 1e-8) continue;
-          const d = Math.sqrt(d2);
-          const push = (minD - d) * 0.5;
-          const nx = dx / d, ny = dy / d;
-          p.x += nx * push; p.y += ny * push;
-          q.x -= nx * push; q.y -= ny * push;
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          const minD = p.size * 2.55;
+          const minD2 = minD * minD;
+          for (let j = i + 1; j < particles.length; j++) {
+            const q = particles[j];
+            if (q.type !== p.type) continue;
+            const dx = p.x - q.x, dy = p.y - q.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= minD2 || d2 < 1e-8) continue;
+            const d = Math.sqrt(d2);
+            const push = (minD - d) * 0.85;
+            const nx = dx / d, ny = dy / d;
+            p.x += nx * push; p.y += ny * push;
+            q.x -= nx * push; q.y -= ny * push;
+          }
         }
       }
     }
@@ -1528,8 +1531,8 @@
       let targetSp = cruise;
       if (mode === 'evade') targetSp = cruise * 1.12;
       if (mode === 'chase' && state === 'CLEAR_HUNT') targetSp = cruise * 1.18;
-      if (p.speed < targetSp) p.speed += Math.min(0.12, targetSp - p.speed);
-      else p.speed += (targetSp - p.speed) * 0.12;
+      if (p.speed < targetSp) p.speed += Math.min(THRUST, targetSp - p.speed);
+      else p.speed += (targetSp - p.speed) * THRUST;
       if (p.speed > cruise * 1.35) p.speed = cruise * 1.35;
       } catch (err) {
         if (opts.onThinkError) {
@@ -1553,10 +1556,7 @@
           const push = (minD - dist + SEPARATION_SLOP) * (a.type === b.type ? 1.15 : 0.55);
           a.x -= nx * push; a.y -= ny * push;
           b.x += nx * push; b.y += ny * push;
-          if (a.type === b.type) {
-            applyPairImpulse(a, b, nx, ny, FRIEND_RESTITUTION, FRIEND_FRICTION);
-            continue;
-          }
+          if (a.type === b.type) continue;
           if (!allowConvert) continue;
           const aEats = PREY[a.type] === b.type;
           const bEats = PREY[b.type] === a.type;
@@ -1593,8 +1593,8 @@
           let vPar = p.vx * hx + p.vy * hy;
           let px = p.vx - vPar * hx, py = p.vy - vPar * hy;
           let dv = (p.speed || 0) - vPar;
-          if (dv > 0.12) dv = 0.12;
-          else if (dv < -0.12) dv = -0.12;
+          if (dv > THRUST) dv = THRUST;
+          else if (dv < -THRUST) dv = -THRUST;
           vPar += dv;
           px *= (1 - SLIP_DAMP);
           py *= (1 - SLIP_DAMP);
