@@ -1243,8 +1243,13 @@ def _cruise_of(p, world_k):
     return float(mot['speed']) * CRUISE_MULT * world_k
 
 
+def _inset(W, H):
+    m = min(W, H) * 0.22
+    return m, W - m, m, H - m
+
+
 def victory_steer(p, particles, dance, tick, W, H, world_k, charge_ang):
-    """Winner celebration. dance 0=haka 1=charge 2=ring 3=wave 4=pairs."""
+    """Fly an inset pattern. Never steer into a wall."""
     cruise = _cruise_of(p, world_k)
     pid = _pid(p)
     ordered = sorted(particles, key=_pid)
@@ -1253,39 +1258,58 @@ def victory_steer(p, particles, dance, tick, W, H, world_k, charge_ang):
         idx = next(i for i, q in enumerate(ordered) if _pid(q) == pid)
     except StopIteration:
         idx = pid % n
-    cx = sum(q.x for q in particles) / n
-    cy = sum(q.y for q in particles) / n
+    x0, x1, y0, y1 = _inset(W, H)
+    cx, cy = 0.5 * (x0 + x1), 0.5 * (y0 + y1)
+    rx, ry = 0.42 * (x1 - x0), 0.42 * (y1 - y0)
+    t = float(tick) * 0.06 + (2.0 * math.pi * idx / n)
     beat = int(tick) % 18
     if dance == 0:
-        # Haka: face audience, stomp in place, short lunge — not a floor pile.
-        p.angle = math.pi
+        # Haka line in the lower-middle, face audience, stomp/lunge in place.
+        cols = max(1, int(math.ceil(math.sqrt(n))))
+        row, col = divmod(idx, cols)
+        tx = x0 + (col + 0.5) / cols * (x1 - x0)
+        ty = cy + 0.22 * (y1 - y0) + row * p.size * 2.4
+        p.angle = heading_to(p.x, p.y, tx, ty) if math.hypot(tx - p.x, ty - p.y) > p.size * 1.2 else math.pi
         if beat <= 4:
-            p.speed = cruise * 0.08
+            p.speed = cruise * (0.9 if math.hypot(tx - p.x, ty - p.y) > p.size * 2 else 0.08)
         elif beat <= 11:
-            p.angle = math.pi + (0.22 if (idx % 2) else -0.22)
-            p.speed = cruise * 0.35
+            p.angle = math.pi + (0.2 if (idx % 2) else -0.2)
+            p.speed = cruise * 0.28
         else:
-            p.speed = cruise * 0.12
+            p.speed = cruise * 0.1
     elif dance == 1:
-        p.angle = float(charge_ang)
-        p.speed = cruise * 1.2
-    elif dance == 2:
-        R = 0.28 * min(W, H)
-        ang = ang_norm((tick * 0.07) + (2.0 * math.pi * idx / n))
-        tx = cx + math.cos(ang) * R
-        ty = cy + math.sin(ang) * R
+        # Rounded-rect lap, inset.
+        u = (tick * 0.035 + idx / n) % 1.0
+        if u < 0.25:
+            tx, ty = x0 + (u / 0.25) * (x1 - x0), y0
+        elif u < 0.5:
+            tx, ty = x1, y0 + ((u - 0.25) / 0.25) * (y1 - y0)
+        elif u < 0.75:
+            tx, ty = x1 - ((u - 0.5) / 0.25) * (x1 - x0), y1
+        else:
+            tx, ty = x0, y1 - ((u - 0.75) / 0.25) * (y1 - y0)
         p.angle = heading_to(p.x, p.y, tx, ty)
-        p.speed = cruise * 1.05
+        p.speed = cruise * 1.15
+    elif dance == 2:
+        tx = cx + math.cos(t) * rx
+        ty = cy + math.sin(t) * ry
+        p.angle = heading_to(p.x, p.y, tx, ty)
+        p.speed = cruise * 1.08
     elif dance == 3:
-        p.angle = ang_norm(float(charge_ang) + 0.4 * math.sin(tick * 0.22 + idx * 0.7))
-        p.speed = cruise * 1.05
+        tx = cx + math.sin(t) * rx
+        ty = cy + math.sin(2.0 * t) * ry * 0.55
+        p.angle = heading_to(p.x, p.y, tx, ty)
+        p.speed = cruise * 1.1
     else:
         mate = ordered[(idx ^ 1) % n] if n > 1 else p
+        mx, my = 0.5 * (p.x + mate.x), 0.5 * (p.y + mate.y)
+        mx = min(x1, max(x0, mx))
+        my = min(y1, max(y0, my))
         if beat < 9:
-            p.angle = heading_to(p.x, p.y, mate.x, mate.y)
-            p.speed = cruise * 1.15
+            p.angle = heading_to(p.x, p.y, mx, my)
+            p.speed = cruise * 1.05
         else:
-            p.angle = heading_to(p.x, p.y, p.x + (p.x - mate.x), p.y + (p.y - mate.y))
+            p.angle = heading_to(p.x, p.y, p.x + (p.x - mx), p.y + (p.y - my))
             p.speed = cruise * 0.7
     p.vx = math.sin(p.angle) * p.speed
     p.vy = -math.cos(p.angle) * p.speed

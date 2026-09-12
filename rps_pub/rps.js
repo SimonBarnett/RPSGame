@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 16, gen: 15, games: 8910, at: "2026-09-12 15:17Z", sha: "af813f0" };
+  const BUILD = { n: 17, gen: 15, games: 8910, at: "2026-09-12 15:19Z", sha: "9a388e9" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1611,35 +1611,44 @@
       const n = Math.max(1, ordered.length);
       let idx = 0;
       for (let i = 0; i < n; i++) if (ordered[i].id === p.id) { idx = i; break; }
-      let cx = 0, cy = 0;
-      for (let i = 0; i < particles.length; i++) { cx += particles[i].x; cy += particles[i].y; }
-      cx /= n; cy /= n;
+      const mrg = Math.min(W, H) * 0.22;
+      const x0 = mrg, x1 = W - mrg, y0 = mrg, y1 = H - mrg;
+      const cx = 0.5 * (x0 + x1), cy = 0.5 * (y0 + y1);
+      const rx = 0.42 * (x1 - x0), ry = 0.42 * (y1 - y0);
+      const t = tick * 0.06 + (2 * Math.PI * idx / n);
       const beat = tick % 18;
+      let tx, ty;
       if (dance === 0) {
-        p.angle = Math.PI;
-        if (beat <= 4) p.speed = cruise * 0.08;
-        else if (beat <= 11) { p.angle = Math.PI + (idx % 2 ? 0.22 : -0.22); p.speed = cruise * 0.35; }
-        else p.speed = cruise * 0.12;
+        const cols = Math.max(1, Math.ceil(Math.sqrt(n)));
+        const col = idx % cols, row = (idx / cols) | 0;
+        tx = x0 + (col + 0.5) / cols * (x1 - x0);
+        ty = cy + 0.22 * (y1 - y0) + row * p.size * 2.4;
+        const d = Math.hypot(tx - p.x, ty - p.y);
+        p.angle = d > p.size * 1.2 ? headingTo(p.x, p.y, tx, ty) : Math.PI;
+        if (beat <= 4) p.speed = cruise * (d > p.size * 2 ? 0.9 : 0.08);
+        else if (beat <= 11) { p.angle = Math.PI + (idx % 2 ? 0.2 : -0.2); p.speed = cruise * 0.28; }
+        else p.speed = cruise * 0.1;
       } else if (dance === 1) {
-        p.angle = chargeAng;
-        p.speed = cruise * 1.2;
+        const u = (tick * 0.035 + idx / n) % 1;
+        if (u < 0.25) { tx = x0 + (u / 0.25) * (x1 - x0); ty = y0; }
+        else if (u < 0.5) { tx = x1; ty = y0 + ((u - 0.25) / 0.25) * (y1 - y0); }
+        else if (u < 0.75) { tx = x1 - ((u - 0.5) / 0.25) * (x1 - x0); ty = y1; }
+        else { tx = x0; ty = y1 - ((u - 0.75) / 0.25) * (y1 - y0); }
+        p.angle = headingTo(p.x, p.y, tx, ty);
+        p.speed = cruise * 1.15;
       } else if (dance === 2) {
-        const R = 0.28 * Math.min(W, H);
-        const ang = (tick * 0.07) + (2 * Math.PI * idx / n);
-        p.angle = headingTo(p.x, p.y, cx + Math.cos(ang) * R, cy + Math.sin(ang) * R);
-        p.speed = cruise * 1.05;
+        p.angle = headingTo(p.x, p.y, cx + Math.cos(t) * rx, cy + Math.sin(t) * ry);
+        p.speed = cruise * 1.08;
       } else if (dance === 3) {
-        p.angle = angNorm(chargeAng + 0.4 * Math.sin(tick * 0.22 + idx * 0.7));
-        p.speed = cruise * 1.05;
+        p.angle = headingTo(p.x, p.y, cx + Math.sin(t) * rx, cy + Math.sin(2 * t) * ry * 0.55);
+        p.speed = cruise * 1.1;
       } else {
         const mate = n > 1 ? ordered[(idx ^ 1) % n] : p;
-        if (beat < 9) {
-          p.angle = headingTo(p.x, p.y, mate.x, mate.y);
-          p.speed = cruise * 1.15;
-        } else {
-          p.angle = headingTo(p.x, p.y, p.x + (p.x - mate.x), p.y + (p.y - mate.y));
-          p.speed = cruise * 0.7;
-        }
+        let mx = 0.5 * (p.x + mate.x), my = 0.5 * (p.y + mate.y);
+        mx = Math.min(x1, Math.max(x0, mx));
+        my = Math.min(y1, Math.max(y0, my));
+        if (beat < 9) { p.angle = headingTo(p.x, p.y, mx, my); p.speed = cruise * 1.05; }
+        else { p.angle = headingTo(p.x, p.y, p.x + (p.x - mx), p.y + (p.y - my)); p.speed = cruise * 0.7; }
       }
       p.vx = Math.sin(p.angle) * p.speed;
       p.vy = -Math.cos(p.angle) * p.speed;
