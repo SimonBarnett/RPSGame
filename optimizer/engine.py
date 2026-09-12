@@ -2279,6 +2279,12 @@ class StrategyOptimizer:
             # simplex still ran above for logs + adaptive LR. Type-wide
             # replicator spray, mutation, GA deploy, and PSO are off.
             every = max(1, int(getattr(self, 'LEARN_EVERY_HEAVY', 10)))
+            try:
+                from config import Config
+                if getattr(Config, 'FAST_SIM', False):
+                    every = 3
+            except Exception:
+                pass
             heavy = (n >= int(getattr(self, 'MIN_GAMES_GA', 8))
                      and (int(self.GENERATION) % every == 0))
             try:
@@ -3380,7 +3386,7 @@ class StrategyOptimizer:
         'LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_STALL', 'LAST_MEAL_ORBIT',
     )
 
-    def _playbook_dir(self, path, fi, blunderous, stall, care=False):
+    def _playbook_dir(self, path, fi, blunderous, stall, care=False, card_score=0.0):
         """Signed step for one tunable. 0 = leave it."""
         if path == 'when.priority' or str(path).endswith('.priority'):
             return 0
@@ -3398,10 +3404,11 @@ class StrategyOptimizer:
             return 0
         if blunderous and name in self._HUNT_KNOBS:
             return -1
-        if fi >= 0:
-            return 0
         if name in self._HUNT_KNOBS:
-            return +1
+            # Type can be winning while this hunt card is still bad.
+            if fi < 0 or float(card_score) < -0.04:
+                return +1
+            return 0
         return 0
 
     def _optimise_playbook(self, fitness, f_bar, wins, skip=None):
@@ -3412,6 +3419,8 @@ class StrategyOptimizer:
         metrics = getattr(getattr(self, 'w', None), 'metrics', None)
         ticks_all = getattr(metrics, 'strategy_ticks', {}) if metrics is not None else {}
         n_chg = 0
+        n_elig = 0
+        n_dir0 = 0
         care_sids = set(self._CARE_SIDS)
         stall_states = {
             'LAST_PREY_RISK', 'LAST_MAN', 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE',
@@ -3459,7 +3468,7 @@ class StrategyOptimizer:
             care.sort(reverse=True)
 
             def _nudge_pool(pool):
-                nonlocal n_chg
+                nonlocal n_chg, n_elig, n_dir0
                 if not pool:
                     return
                 used_scores = [scores[s] for _, s in pool]
@@ -3480,15 +3489,25 @@ class StrategyOptimizer:
                         pass
                     dec = scores.get(sid, 0.0) - mean_s
                     fi = math.tanh(dec)
+                    ema = float(st.get('ema') or 0)
+                    half = False
                     if abs(fi) < 0.04:
-                        continue
-                    strength = 0.30 + 0.55 * abs(fi)
+                        if (not is_care) and (not stall) and ema < 0 and used > 0:
+                            fi = -0.08
+                            half = True
+                        else:
+                            n_dir0 += 1
+                            continue
+                    n_elig += 1
+                    strength = (0.18 if half else 0.30) + 0.55 * abs(fi)
                     n_this = 0
+                    wrote_any = False
                     for path, bounds in tunables.items():
-                        if n_this >= 4:
+                        if n_this >= (2 if half else 4):
                             break
                         direction = self._playbook_dir(
-                            path, fi, blunderous, stall, care=is_care)
+                            path, fi, blunderous, stall, care=is_care,
+                            card_score=scores.get(sid, 0.0))
                         if direction == 0:
                             continue
                         moved = playbook.nudge_tunable(
@@ -3497,17 +3516,21 @@ class StrategyOptimizer:
                             continue
                         n_chg += 1
                         n_this += 1
+                        wrote_any = True
                         cur = playbook._get_path(moved, path)
                         self.last_changes.append(
                             '%s.%s.%s -> %s  (f%+.2f dec%+.2f d%+d)' % (
                                 tname, sid, path, cur, fi, dec, direction))
+                    if not wrote_any:
+                        n_dir0 += 1
 
             _nudge_pool(combat[:3])
             _nudge_pool(stall_pool[:2])
             _nudge_pool(care[:1])
         playbook.save_all_overlays()
-        self._log_raw('playbook strategy pass changes=%d strategies=%d skip=%d' % (
-            n_chg, len(playbook.list_ids()), len(skip)))
+        self._log_raw(
+            'playbook strategy pass changes=%d wrote=%d eligible=%d dir0=%d strategies=%d skip=%d' % (
+                n_chg, n_chg, n_elig, n_dir0, len(playbook.list_ids()), len(skip)))
 
     def _bo_record(self):
         """Snapshot current knob vector + payoff for every overlay that played."""
