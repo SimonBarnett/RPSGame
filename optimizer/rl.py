@@ -137,18 +137,13 @@ def episode_return(type_name, winner, duration_s, wipe_by_type,
     won = 1.0 if str(winner or '').upper() == type_name else 0.0
     wiped = _num((wipe_by_type or {}).get(type_name, 0)) > 0
     sc = _dur_scale()
-    sc = max(0.55, sc)
-    wipe_short = 10.0
-    dur_center = 18.0
-    dur_span = 12.0
+    wipe_short = 22.0 * sc
 
-    # 1. Win, but not a 3-second blob melt
+    # Win is always good. Do not score duration — that trains stalling.
     G = 1.15 * won
-    if won and dur < 8.0:
-        G -= 0.85
 
-    # 2. Not-losing: longer match is always good.
-    G += 0.55 * math.tanh((dur - dur_center) / dur_span)
+    # Last-meal discipline: popping the last prey while a predator lives
+    # is a blunder, not a faster win.
     if wiped:
         G -= 2.80
         G -= 0.55 * max(0.0, (wipe_short - dur) / max(1e-6, wipe_short))
@@ -159,10 +154,6 @@ def episode_return(type_name, winner, duration_s, wipe_by_type,
         total = sum(occ.values()) or 1.0
         if care / total > 0.06:
             G += 0.22
-
-    # 3. Long endgame rallies are good for hunter and prey.
-    if eg > 0.4:
-        G += 0.30 * math.tanh((eg - 6.0) / 8.0)
 
     return max(-5.0, min(4.0, G))
 
