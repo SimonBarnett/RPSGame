@@ -1257,15 +1257,15 @@ def victory_steer(p, particles, dance, tick, W, H, world_k, charge_ang):
     cy = sum(q.y for q in particles) / n
     beat = int(tick) % 18
     if dance == 0:
+        # Haka: face audience, stomp in place, short lunge — not a floor pile.
         p.angle = math.pi
         if beat <= 4:
-            p.speed = cruise * 0.15
+            p.speed = cruise * 0.08
         elif beat <= 11:
-            p.angle = math.pi + (0.18 if (idx % 2) else -0.18)
-            p.speed = cruise * 1.25
+            p.angle = math.pi + (0.22 if (idx % 2) else -0.22)
+            p.speed = cruise * 0.35
         else:
-            p.angle = math.pi
-            p.speed = cruise * 0.45
+            p.speed = cruise * 0.12
     elif dance == 1:
         p.angle = float(charge_ang)
         p.speed = cruise * 1.2
@@ -1277,8 +1277,8 @@ def victory_steer(p, particles, dance, tick, W, H, world_k, charge_ang):
         p.angle = heading_to(p.x, p.y, tx, ty)
         p.speed = cruise * 1.05
     elif dance == 3:
-        p.angle = (math.pi * 0.5) if (idx % 2 == 0) else (math.pi * 1.5)
-        p.speed = cruise * (1.0 + 0.25 * math.sin(tick * 0.22 + idx * 0.7))
+        p.angle = ang_norm(float(charge_ang) + 0.4 * math.sin(tick * 0.22 + idx * 0.7))
+        p.speed = cruise * 1.05
     else:
         mate = ordered[(idx ^ 1) % n] if n > 1 else p
         if beat < 9:

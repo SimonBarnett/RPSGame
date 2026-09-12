@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 15, gen: 15, games: 8910, at: "2026-09-12 15:15Z", sha: "79586a3" };
+  const BUILD = { n: 16, gen: 15, games: 8910, at: "2026-09-12 15:17Z", sha: "af813f0" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1617,9 +1617,9 @@
       const beat = tick % 18;
       if (dance === 0) {
         p.angle = Math.PI;
-        if (beat <= 4) p.speed = cruise * 0.15;
-        else if (beat <= 11) { p.angle = Math.PI + (idx % 2 ? 0.18 : -0.18); p.speed = cruise * 1.25; }
-        else { p.angle = Math.PI; p.speed = cruise * 0.45; }
+        if (beat <= 4) p.speed = cruise * 0.08;
+        else if (beat <= 11) { p.angle = Math.PI + (idx % 2 ? 0.22 : -0.22); p.speed = cruise * 0.35; }
+        else p.speed = cruise * 0.12;
       } else if (dance === 1) {
         p.angle = chargeAng;
         p.speed = cruise * 1.2;
@@ -1629,8 +1629,8 @@
         p.angle = headingTo(p.x, p.y, cx + Math.cos(ang) * R, cy + Math.sin(ang) * R);
         p.speed = cruise * 1.05;
       } else if (dance === 3) {
-        p.angle = (idx % 2 === 0) ? (Math.PI * 0.5) : (Math.PI * 1.5);
-        p.speed = cruise * (1.0 + 0.25 * Math.sin(tick * 0.22 + idx * 0.7));
+        p.angle = angNorm(chargeAng + 0.4 * Math.sin(tick * 0.22 + idx * 0.7));
+        p.speed = cruise * 1.05;
       } else {
         const mate = n > 1 ? ordered[(idx ^ 1) % n] : p;
         if (beat < 9) {
