@@ -662,7 +662,16 @@ def pack_eject(p, particles, W, H):
     on_edge = p.x < edge or p.x > W - edge or p.y < edge or p.y > H - edge
     if not on_edge:
         return None
-    return heading_to(p.x, p.y, W * 0.5, H * 0.5)
+    nx = ny = 0.0
+    if p.x < edge:
+        nx = 1.0
+    elif p.x > W - edge:
+        nx = -1.0
+    if p.y < edge:
+        ny = 1.0
+    elif p.y > H - edge:
+        ny = -1.0
+    return ang_norm(math.atan2(nx, -ny) + ((int(getattr(p, 'id', 0) or 0) % 7) - 3) * 0.22)
 
 
 def wall_escape(p, W, H, pad):
@@ -678,8 +687,6 @@ def wall_escape(p, W, H, pad):
         fy -= (p.y - (H - band)) / band
     if abs(fx) + abs(fy) < 0.04:
         return None
-    fx += (W * 0.5 - p.x) * 0.012
-    fy += (H * 0.5 - p.y) * 0.012
     corner = (p.x < band or p.x > W - band) and (p.y < band or p.y > H - band)
     return {'h': math.atan2(fx, -fy), 'w': 0.85 if corner else 0.7}
 
@@ -736,7 +743,18 @@ def bounce_wall(p, W, H):
         _apply_plane_impulse(p, 0.0, 1.0, 0.0, -r, e, mu)
         hit = True
     if hit:
-        p.angle = heading_to(p.x, p.y, W * 0.5, H * 0.5)
+        # Off the wall, not at a shared centre point.
+        nx = 0.0
+        ny = 0.0
+        if p.x <= m + 0.5:
+            nx = 1.0
+        elif p.x >= W - m - 0.5:
+            nx = -1.0
+        if p.y <= m + 0.5:
+            ny = 1.0
+        elif p.y >= H - m - 0.5:
+            ny = -1.0
+        p.angle = ang_norm(math.atan2(nx, -ny) + ((int(getattr(p, 'id', 0) or 0) % 7) - 3) * 0.22)
         p.speed = max(math.hypot(p.vx, p.vy), 2.8)
         p.vx = math.sin(p.angle) * p.speed
         p.vy = -math.cos(p.angle) * p.speed
@@ -1116,8 +1134,8 @@ def think(world, p, counts, W, H, pad, world_k, forts):
             ww = 0.92 if d < r + p.size * 1.8 else 0.5
             want = blend_headings(blend_headings(want, tang, ww), out, 0.28)
     if prey_n == 0:
-        want = blend_headings(want, heading_to(p.x, p.y, W * 0.5, H * 0.5), 0.55)
-        want = blend_headings(want, desync_heading(p, None), 0.4)
+        # Keep swimming; unique fan so they do not pile on centre.
+        want = ang_norm(p.angle + ((int(getattr(p, 'id', 0) or 0) % 7) - 3) * 0.28)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))

@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 10, gen: 16, games: 8895, at: "2026-09-12 14:45Z", sha: "d3738cf" };
+  const BUILD = { n: 11, gen: 16, games: 8895, at: "2026-09-12 14:49Z", sha: "4a5d114" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1222,7 +1222,12 @@
       if (p.y > H - m) { p.y = H - m; applyPlaneImpulse(p, 0, -1, 0, r, e, mu); hit = true; }
       else if (p.y < m) { p.y = m; applyPlaneImpulse(p, 0, 1, 0, -r, e, mu); hit = true; }
       if (hit) {
-        p.angle = headingTo(p.x, p.y, W * 0.5, H * 0.5);
+        let nx = 0, ny = 0;
+        if (p.x <= m + 0.5) nx = 1;
+        else if (p.x >= W - m - 0.5) nx = -1;
+        if (p.y <= m + 0.5) ny = 1;
+        else if (p.y >= H - m - 0.5) ny = -1;
+        p.angle = angNorm(Math.atan2(nx, -ny) + ((p.id % 7) - 3) * 0.22);
         p.speed = Math.max(Math.hypot(p.vx, p.vy), 2.8);
         p.vx = Math.sin(p.angle) * p.speed;
         p.vy = -Math.cos(p.angle) * p.speed;
@@ -1242,7 +1247,12 @@
       const edge = p.size * 5.5;
       const onEdge = p.x < edge || p.x > W - edge || p.y < edge || p.y > H - edge;
       if (!onEdge) return null;
-      return headingTo(p.x, p.y, W * 0.5, H * 0.5);
+      let nx = 0, ny = 0;
+      if (p.x < edge) nx = 1;
+      else if (p.x > W - edge) nx = -1;
+      if (p.y < edge) ny = 1;
+      else if (p.y > H - edge) ny = -1;
+      return angNorm(Math.atan2(nx, -ny) + ((p.id % 7) - 3) * 0.22);
     }
     function wallEscape(p) {
       const band = p.size * 4.0;
@@ -1252,8 +1262,6 @@
       if (p.y < band) fy += (band - p.y) / band;
       if (p.y > H - band) fy -= (p.y - (H - band)) / band;
       if (Math.abs(fx) + Math.abs(fy) < 0.04) return null;
-      fx += (W * 0.5 - p.x) * 0.012;
-      fy += (H * 0.5 - p.y) * 0.012;
       const corner = (p.x < band || p.x > W - band) && (p.y < band || p.y > H - band);
       return { h: Math.atan2(fx, -fy), w: corner ? 0.85 : 0.7 };
     }
@@ -1534,8 +1542,7 @@
       }
 
       if (preyN === 0) {
-        want = blendHeadings(want, headingTo(p.x, p.y, W * 0.5, H * 0.5), 0.55);
-        want = blendHeadings(want, desyncHeading(p, null), 0.4);
+        want = angNorm(p.angle + ((p.id % 7) - 3) * 0.28);
       }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
