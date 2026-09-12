@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 17, gen: 15, games: 8910, at: "2026-09-12 15:19Z", sha: "9a388e9" };
+  const BUILD = { n: 18, gen: 16, games: 8954, at: "2026-09-12 15:53Z", sha: "a91bcc1" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1508,6 +1508,12 @@
         p._locked = null;
       }
       if (mode === 'evade') want = angNorm(want + ((p.id % 7) - 3) * 0.2);
+      if (fear && fear.obj && state !== 'NEAR_WIPE') {
+        const fd = fear.d;
+        const flee = angNorm(headingTo(p.x, p.y, fear.obj.x, fear.obj.y) + Math.PI);
+        if (fd < p.size * 4.5) { want = flee; mode = 'evade'; }
+        else if (fd < p.size * 8.5) want = blendHeadings(want, flee, 0.7);
+      }
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
       const eject = packEject(p, particles);
@@ -1614,42 +1620,12 @@
       const mrg = Math.min(W, H) * 0.22;
       const x0 = mrg, x1 = W - mrg, y0 = mrg, y1 = H - mrg;
       const cx = 0.5 * (x0 + x1), cy = 0.5 * (y0 + y1);
-      const rx = 0.42 * (x1 - x0), ry = 0.42 * (y1 - y0);
-      const t = tick * 0.06 + (2 * Math.PI * idx / n);
-      const beat = tick % 18;
-      let tx, ty;
-      if (dance === 0) {
-        const cols = Math.max(1, Math.ceil(Math.sqrt(n)));
-        const col = idx % cols, row = (idx / cols) | 0;
-        tx = x0 + (col + 0.5) / cols * (x1 - x0);
-        ty = cy + 0.22 * (y1 - y0) + row * p.size * 2.4;
-        const d = Math.hypot(tx - p.x, ty - p.y);
-        p.angle = d > p.size * 1.2 ? headingTo(p.x, p.y, tx, ty) : Math.PI;
-        if (beat <= 4) p.speed = cruise * (d > p.size * 2 ? 0.9 : 0.08);
-        else if (beat <= 11) { p.angle = Math.PI + (idx % 2 ? 0.2 : -0.2); p.speed = cruise * 0.28; }
-        else p.speed = cruise * 0.1;
-      } else if (dance === 1) {
-        const u = (tick * 0.035 + idx / n) % 1;
-        if (u < 0.25) { tx = x0 + (u / 0.25) * (x1 - x0); ty = y0; }
-        else if (u < 0.5) { tx = x1; ty = y0 + ((u - 0.25) / 0.25) * (y1 - y0); }
-        else if (u < 0.75) { tx = x1 - ((u - 0.5) / 0.25) * (x1 - x0); ty = y1; }
-        else { tx = x0; ty = y1 - ((u - 0.75) / 0.25) * (y1 - y0); }
-        p.angle = headingTo(p.x, p.y, tx, ty);
-        p.speed = cruise * 1.15;
-      } else if (dance === 2) {
-        p.angle = headingTo(p.x, p.y, cx + Math.cos(t) * rx, cy + Math.sin(t) * ry);
-        p.speed = cruise * 1.08;
-      } else if (dance === 3) {
-        p.angle = headingTo(p.x, p.y, cx + Math.sin(t) * rx, cy + Math.sin(2 * t) * ry * 0.55);
-        p.speed = cruise * 1.1;
-      } else {
-        const mate = n > 1 ? ordered[(idx ^ 1) % n] : p;
-        let mx = 0.5 * (p.x + mate.x), my = 0.5 * (p.y + mate.y);
-        mx = Math.min(x1, Math.max(x0, mx));
-        my = Math.min(y1, Math.max(y0, my));
-        if (beat < 9) { p.angle = headingTo(p.x, p.y, mx, my); p.speed = cruise * 1.05; }
-        else { p.angle = headingTo(p.x, p.y, p.x + (p.x - mx), p.y + (p.y - my)); p.speed = cruise * 0.7; }
-      }
+      const rx = 0.38 * (x1 - x0), ry = 0.38 * (y1 - y0);
+      const sign = (dance % 2) ? -1 : 1;
+      const scale = (dance === 2 && (idx % 2)) ? 0.62 : 1;
+      const t2 = sign * (tick * 0.045 + 2 * Math.PI * idx / n + 0.22);
+      p.angle = headingTo(p.x, p.y, cx + Math.cos(t2) * rx * scale, cy + Math.sin(t2) * ry * scale);
+      p.speed = cruise * 0.95;
       p.vx = Math.sin(p.angle) * p.speed;
       p.vy = -Math.cos(p.angle) * p.speed;
     }
@@ -1665,7 +1641,7 @@
       const playAI = move && !winner;
       if (winner && danceId == null) {
         const rng = mulberry32((seed + (simVoronoi.tick || 0)) | 0);
-        danceId = (rng() * 5) | 0;
+        danceId = (rng() * 3) | 0;
         chargeAng = rng() * Math.PI * 2;
         if (opts.onSfx) try { opts.onSfx('win'); } catch (e) {}
       }

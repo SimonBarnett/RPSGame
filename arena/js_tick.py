@@ -1100,6 +1100,15 @@ def think(world, p, counts, W, H, pad, world_k, forts):
         p._locked = None
     if mode == 'evade':
         want = ang_norm(want + ((int(getattr(p, 'id', 0) or 0) % 7) - 3) * 0.2)
+    # Never drive into a predator (NEAR_WIPE body-check may still intercept).
+    if fear and fear.get('obj') is not None and state != 'NEAR_WIPE':
+        fd = float(fear.get('d') or 1e9)
+        flee = ang_norm(heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y) + math.pi)
+        if fd < p.size * 4.5:
+            want = flee
+            mode = 'evade'
+        elif fd < p.size * 8.5:
+            want = blend_headings(want, flee, 0.7)
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])
@@ -1249,7 +1258,7 @@ def _inset(W, H):
 
 
 def victory_steer(p, particles, dance, tick, W, H, world_k, charge_ang):
-    """Fly an inset pattern. Never steer into a wall."""
+    """Smooth inset orbits. Look-ahead on the path — no stomps or wall runs."""
     cruise = _cruise_of(p, world_k)
     pid = _pid(p)
     ordered = sorted(particles, key=_pid)
@@ -1260,57 +1269,14 @@ def victory_steer(p, particles, dance, tick, W, H, world_k, charge_ang):
         idx = pid % n
     x0, x1, y0, y1 = _inset(W, H)
     cx, cy = 0.5 * (x0 + x1), 0.5 * (y0 + y1)
-    rx, ry = 0.42 * (x1 - x0), 0.42 * (y1 - y0)
-    t = float(tick) * 0.06 + (2.0 * math.pi * idx / n)
-    beat = int(tick) % 18
-    if dance == 0:
-        # Haka line in the lower-middle, face audience, stomp/lunge in place.
-        cols = max(1, int(math.ceil(math.sqrt(n))))
-        row, col = divmod(idx, cols)
-        tx = x0 + (col + 0.5) / cols * (x1 - x0)
-        ty = cy + 0.22 * (y1 - y0) + row * p.size * 2.4
-        p.angle = heading_to(p.x, p.y, tx, ty) if math.hypot(tx - p.x, ty - p.y) > p.size * 1.2 else math.pi
-        if beat <= 4:
-            p.speed = cruise * (0.9 if math.hypot(tx - p.x, ty - p.y) > p.size * 2 else 0.08)
-        elif beat <= 11:
-            p.angle = math.pi + (0.2 if (idx % 2) else -0.2)
-            p.speed = cruise * 0.28
-        else:
-            p.speed = cruise * 0.1
-    elif dance == 1:
-        # Rounded-rect lap, inset.
-        u = (tick * 0.035 + idx / n) % 1.0
-        if u < 0.25:
-            tx, ty = x0 + (u / 0.25) * (x1 - x0), y0
-        elif u < 0.5:
-            tx, ty = x1, y0 + ((u - 0.25) / 0.25) * (y1 - y0)
-        elif u < 0.75:
-            tx, ty = x1 - ((u - 0.5) / 0.25) * (x1 - x0), y1
-        else:
-            tx, ty = x0, y1 - ((u - 0.75) / 0.25) * (y1 - y0)
-        p.angle = heading_to(p.x, p.y, tx, ty)
-        p.speed = cruise * 1.15
-    elif dance == 2:
-        tx = cx + math.cos(t) * rx
-        ty = cy + math.sin(t) * ry
-        p.angle = heading_to(p.x, p.y, tx, ty)
-        p.speed = cruise * 1.08
-    elif dance == 3:
-        tx = cx + math.sin(t) * rx
-        ty = cy + math.sin(2.0 * t) * ry * 0.55
-        p.angle = heading_to(p.x, p.y, tx, ty)
-        p.speed = cruise * 1.1
-    else:
-        mate = ordered[(idx ^ 1) % n] if n > 1 else p
-        mx, my = 0.5 * (p.x + mate.x), 0.5 * (p.y + mate.y)
-        mx = min(x1, max(x0, mx))
-        my = min(y1, max(y0, my))
-        if beat < 9:
-            p.angle = heading_to(p.x, p.y, mx, my)
-            p.speed = cruise * 1.05
-        else:
-            p.angle = heading_to(p.x, p.y, p.x + (p.x - mx), p.y + (p.y - my))
-            p.speed = cruise * 0.7
+    rx, ry = 0.38 * (x1 - x0), 0.38 * (y1 - y0)
+    sign = -1.0 if (dance % 2) else 1.0
+    scale = 0.62 if (dance == 2 and (idx % 2)) else 1.0
+    t2 = sign * (float(tick) * 0.045 + 2.0 * math.pi * idx / n + 0.22)
+    tx = cx + math.cos(t2) * rx * scale
+    ty = cy + math.sin(t2) * ry * scale
+    p.angle = heading_to(p.x, p.y, tx, ty)
+    p.speed = cruise * 0.95
     p.vx = math.sin(p.angle) * p.speed
     p.vy = -math.cos(p.angle) * p.speed
 
@@ -1358,7 +1324,7 @@ def step(world, move=True, keep_alive=False):
         from arena.layout import mulberry32
         seed = int(getattr(world, '_pin_match_seed', 1) or 1)
         rng = mulberry32((seed + world._js_tick_i) & 0xffffffff)
-        world._js_dance = int(rng() * 5) % 5
+        world._js_dance = int(rng() * 3) % 3
         world._js_charge_ang = rng() * math.pi * 2
     if play_ai or (not move):
         for p in particles:
