@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 7, gen: 16, games: 8879, at: "2026-09-12 14:21Z", sha: "ee7ab82" };
+  const BUILD = { n: 8, gen: 16, games: 8879, at: "2026-09-12 14:26Z", sha: "b368d12" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1231,7 +1231,7 @@
       p.angle = headingTo(p.x, p.y, W * 0.42, H * 0.58);
     }
     function packEject(p, particles) {
-      const edge = p.size * 3.2;
+      const edge = p.size * 5.0;
       const onEdge = p.x < edge || p.x > W - edge || p.y < edge || p.y > H - edge;
       if (!onEdge) return null;
       let n = 0;
@@ -1504,7 +1504,7 @@
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
       const eject = packEject(p, particles);
-      if (eject != null) want = blendHeadings(want, eject, 0.45);
+      if (eject != null) want = blendHeadings(want, eject, 0.65);
       let nearN = 0;
       const r5 = (p.size * 5) * (p.size * 5);
       for (let ai = 0; ai < allies.length; ai++) {
@@ -1542,7 +1542,7 @@
       }
       let targetSp = cruise;
       if (mode === 'evade') targetSp = cruise * 1.12;
-      if (mode === 'chase' && state === 'CLEAR_HUNT') targetSp = cruise * 1.18;
+      if (mode === 'chase' && state === 'CLEAR_HUNT') targetSp = cruise * 1.35;
       if (p.speed < targetSp) p.speed += Math.min(THRUST, targetSp - p.speed);
       else p.speed += (targetSp - p.speed) * THRUST;
       if (p.speed > cruise * 1.35) p.speed = cruise * 1.35;
@@ -1556,6 +1556,8 @@
     /** Convert-on-contact (RPS) or same-type separate. Collisions halve speed. */
     function collide(allowConvert) {
       if (allowConvert == null) allowConvert = true;
+      const cNow = counts();
+      const typesAlive = (cNow.ROCK > 0 ? 1 : 0) + (cNow.PAPER > 0 ? 1 : 0) + (cNow.SCISSORS > 0 ? 1 : 0);
       for (let i = 0; i < particles.length; i++) {
         const a = particles[i];
         for (let j = i + 1; j < particles.length; j++) {
@@ -1575,7 +1577,7 @@
           ensureVel(a); ensureVel(b);
           const relN = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
           applyPairImpulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION);
-          if (!allowConvert || relN < 0.12) continue;
+          if (!allowConvert || (typesAlive > 2 && relN < 0)) continue;
           const winnerP = aEats ? a : b;
           const loser = aEats ? b : a;
           loser.type = winnerP.type;

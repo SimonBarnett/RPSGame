@@ -658,7 +658,7 @@ def nearest(p, type_name, particles):
 
 
 def pack_eject(p, particles, W, H):
-    edge = p.size * 3.2
+    edge = p.size * 5.0
     on_edge = p.x < edge or p.x > W - edge or p.y < edge or p.y > H - edge
     if not on_edge:
         return None
@@ -1086,7 +1086,7 @@ def think(world, p, counts, W, H, pad, world_k, forts):
         want = blend_headings(want, we2['h'], we2['w'])
     eject = pack_eject(p, world.particles, W, H)
     if eject is not None:
-        want = blend_headings(want, eject, 0.45)
+        want = blend_headings(want, eject, 0.65)
     near_n = 0
     r5 = (p.size * 5) ** 2
     for q in allies:
@@ -1121,7 +1121,7 @@ def think(world, p, counts, W, H, pad, world_k, forts):
     if mode == 'evade':
         target_sp = cruise * 1.12
     if mode == 'chase' and state == 'CLEAR_HUNT':
-        target_sp = cruise * 1.18
+        target_sp = cruise * 1.35
     if p.speed < target_sp:
         p.speed += min(THRUST, target_sp - p.speed)
     else:
@@ -1155,6 +1155,7 @@ def _unstick_friends(particles):
 
 def collide(world, allow_convert=True):
     particles = world.particles
+    types_alive = len({_tname(p) for p in particles})
     for i in range(len(particles)):
         a = particles[i]
         for j in range(i + 1, len(particles)):
@@ -1182,7 +1183,8 @@ def collide(world, allow_convert=True):
             _ensure_vel(b)
             rel_n = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny
             _apply_pair_impulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION)
-            if (not allow_convert) or rel_n < 0.12:
+            # Two types left: tag finishes the hunt (slow hunter vs fast kite).
+            if (not allow_convert) or (types_alive > 2 and rel_n < 0.0):
                 continue
             winner_p = a if a_eats else b
             loser = b if a_eats else a
