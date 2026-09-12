@@ -102,6 +102,11 @@ def stamp_html(path, build_n):
         'src="./rps.js?v=%d"' % int(build_n),
         src,
     )
+    src = re.sub(
+        r'register\("\./sw\.js(?:\?v=\d+)?"\)',
+        'register("./sw.js?v=%d")' % int(build_n),
+        src,
+    )
     open(path, "w", encoding="utf-8", newline="\n").write(src)
 
 

@@ -449,7 +449,7 @@ CARD_FOR_STATE = {
     'CLEAR_HUNT': ['CLEAR_SPLIT', 'CLEAR_FAN', 'FINISH_CLOCK', 'PACK_HUNT'],
     'LAST_PREY_RISK': ['LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_ORBIT'],
     'LAST_MAN': ['LAST_MAN_RUN', 'SURVIVE_FEAR', 'ORBIT_KITE'],
-    'NEAR_WIPE': ['LAST_MAN_RUN', 'SURVIVE_FEAR', 'SCATTER_RAID'],
+    'NEAR_WIPE': ['BODY_CHECK', 'LAST_MAN_RUN', 'SURVIVE_FEAR', 'SCATTER_RAID'],
     'NO_PREY_FEAR_ALIVE': ['SURVIVE_FEAR', 'ORBIT_KITE', 'SHADOW_PREY', 'HOLD_COVER'],
     'OUTNUMBERED': ['GIVE_GROUND', 'HOLD_COVER', 'SHADOW_PREY'],
     'SMALL_UNIT': ['SCATTER_RAID', 'OPEN_KITE', 'SCREEN_HUNT'],
@@ -1631,6 +1631,21 @@ def credit_decisions(match):
                     slotv['alpha'] = float(slotv.get('alpha') or 1.0) + 0.4
                 vs[lt] = _shrink_ab(slotv)
                 st['by_vs'] = vs
+            near_ticks = 0
+            try:
+                sbag = ((match.get('state_ticks') or {}).get(wt) or {}).get(ws) or {}
+                if isinstance(sbag, dict):
+                    near_ticks = int(sbag.get('NEAR_WIPE') or 0)
+            except Exception:
+                near_ticks = 0
+            if near_ticks > 0 and not blunder:
+                st['alpha'] = float(st.get('alpha') or 1.0) + 0.55
+                st['ema'] = float(st.get('ema') or 0) + 0.08
+                bys = dict(st.get('by_state') or {})
+                slotn = dict(bys.get('NEAR_WIPE') or {'n': 0, 'alpha': 1.0, 'beta': 1.0, 'ema': 0.0})
+                slotn['alpha'] = float(slotn.get('alpha') or 1.0) + 0.55
+                bys['NEAR_WIPE'] = slotn
+                st['by_state'] = bys
             if blocked:
                 st['blocked_womble'] = int(st['blocked_womble']) + 1
             by = dict(st.get('by_mode') or {})

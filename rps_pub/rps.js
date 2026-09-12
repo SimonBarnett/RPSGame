@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 3, gen: 16, games: 8879, at: "2026-09-12 13:49Z", sha: "239dab3" };
+  const BUILD = { n: 4, gen: 16, games: 8879, at: "2026-09-12 13:57Z", sha: "154e8c0" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -448,7 +448,7 @@
     CLEAR_HUNT: ['CLEAR_SPLIT', 'CLEAR_FAN', 'FINISH_CLOCK', 'PACK_HUNT'],
     LAST_PREY_RISK: ['LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_ORBIT'],
     LAST_MAN: ['LAST_MAN_RUN', 'SURVIVE_FEAR', 'ORBIT_KITE'],
-    NEAR_WIPE: ['LAST_MAN_RUN', 'SURVIVE_FEAR', 'SCATTER_RAID'],
+    NEAR_WIPE: ['BODY_CHECK', 'LAST_MAN_RUN', 'SURVIVE_FEAR', 'SCATTER_RAID'],
     NO_PREY_FEAR_ALIVE: ['SURVIVE_FEAR', 'ORBIT_KITE', 'SHADOW_PREY', 'HOLD_COVER'],
     OUTNUMBERED: ['GIVE_GROUND', 'HOLD_COVER', 'SHADOW_PREY'],
     SMALL_UNIT: ['SCATTER_RAID', 'OPEN_KITE', 'SCREEN_HUNT'],
@@ -527,6 +527,7 @@
     HOLD_COVER: { movement: [{fn:'cover.cover_heading',blend:0.7}] },
     REGROUP_MASS: { movement: [{fn:'boids.desired_heading',blend:0.5}] },
     SCATTER_RAID: { movement: [{fn:'boids.desired_heading',blend:0.35},{fn:'intercept.heading',blend:0.45}] },
+    BODY_CHECK: { movement: [{fn:'intercept.fear',blend:0.75},{fn:'boids.desired_heading',blend:0.3}] },
     HASH_MELEE: { movement: [{fn:'hash.heading',blend:0.7},{fn:'boids.desired_heading',blend:0.25}] },
     LOS_SPRING: { movement: [{fn:'cover.clear',blend:0.7},{fn:'cover.cover_heading',blend:0.35}] }
   };
@@ -691,11 +692,15 @@
     return Math.atan2(x, -y);
   }
   /** Intercept: aim at predicted prey position (lookahead frames). */
+  function bodyVel(p) {
+    if (p.vx != null && p.vy != null) return { x: p.vx, y: p.vy };
+    const sp = p.speed || 0;
+    return { x: Math.sin(p.angle) * sp, y: -Math.cos(p.angle) * sp };
+  }
   function chaseHeading(p, prey, look) {
     if (!prey) return null;
-    const px = prey.x + Math.sin(prey.angle) * prey.speed * look;
-    const py = prey.y - Math.cos(prey.angle) * prey.speed * look;
-    return headingTo(p.x, p.y, px, py);
+    const v = bodyVel(prey);
+    return headingTo(p.x, p.y, prey.x + v.x * look, prey.y + v.y * look);
   }
   /** Split hunters across remaining prey; overflow walks Delaunay neighbours. */
   function voronoiAssign(hunters, preys) {
@@ -924,9 +929,8 @@
   function interceptHeading(p, prey, mode) {
     if (!prey) return null;
     if (mode === 'chord') {
-      const px = prey.x + Math.sin(prey.angle) * prey.speed * 6;
-      const py = prey.y - Math.cos(prey.angle) * prey.speed * 6;
-      return headingTo(p.x, p.y, px, py);
+      const v = bodyVel(prey);
+      return headingTo(p.x, p.y, prey.x + v.x * 6, prey.y + v.y * 6);
     }
     return chaseHeading(p, prey, 18);
   }
@@ -992,7 +996,7 @@
       }
     } else if (state === 'LAST_MAN' || state === 'NO_PREY_FEAR_ALIVE' || state === 'NEAR_WIPE') {
       const keep = [{ fn: 'sectors.orient', blend: 0.8 }];
-      const raid = state === 'LAST_MAN' && ctx.preyN > 0;
+      const raid = (state === 'LAST_MAN' && ctx.preyN > 0) || state === 'NEAR_WIPE';
       list.forEach(function (s) {
         const fn = String((s || {}).fn || '');
         if (!raid && (fn.indexOf('orbit.') === 0 || fn.indexOf('time.') === 0 || fn.indexOf('intercept.') === 0)) return;
@@ -1014,6 +1018,7 @@
       if (fn === 'pressure.heading' || fn === 'pressure.force') return pressureHeading(p, ctx.particles);
       if (fn === 'lanes.heading') return laneHeading(p, ctx.W, ctx.H, prey);
       if (fn === 'intercept.heading' || fn === 'intercept.lead') return interceptHeading(p, prey, 'lead');
+      if (fn === 'intercept.fear' || fn === 'intercept.block') return interceptHeading(p, fear, 'lead');
       if (fn === 'intercept.chord') return interceptHeading(p, prey, 'chord');
       if (fn === 'desync.heading') return desyncHeading(p, prey);
       if (fn === 'voronoi.assign' || fn.indexOf('voronoi') >= 0) {

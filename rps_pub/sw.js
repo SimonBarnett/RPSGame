@@ -1,7 +1,10 @@
 /* RPS PWA service worker — cache the shell next to this file. */
-const CACHE = "rps-v3";
-const SHELL = ["./", "./index.html", "./rps.js", "./manifest.webmanifest",
-               "./icons/icon-192.png", "./icons/icon-512.png', './images/Rock.png', './images/Paper.png', './images/Scissors.png", "./icons/apple-touch-icon.png"];
+const CACHE = "rps-v4";
+const SHELL = [
+  "./", "./index.html", "./rps.js", "./build.json", "./manifest.webmanifest",
+  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png",
+  "./images/rock.png", "./images/paper.png", "./images/scissors.png"
+];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" }))).catch(() => {}));

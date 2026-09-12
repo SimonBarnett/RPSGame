@@ -1,0 +1,41 @@
+{
+  "id": "BODY_CHECK",
+  "title": "Body check",
+  "mode": "HUNT",
+  "desc": "Two left and a predator is on your ally: intercept the predator and use mass to knock them off the teammate.",
+  "when": {
+    "states": ["NEAR_WIPE"],
+    "priority": 96
+  },
+  "tactics": [
+    "intercept",
+    "flock_coh",
+    "pincer_flank",
+    "fear_flee"
+  ],
+  "math": ["intercept", "boids", "steer"],
+  "movement": [
+    {"fn": "intercept.fear", "blend": 0.75},
+    {"fn": "boids.desired_heading", "blend": 0.3},
+    {"fn": "steer.apply_wall_bias", "blend": 0.15}
+  ],
+  "switch": {"hold_frames": 6, "margin": 0.8},
+  "tunables": {
+    "switch.hold_frames": [4, 16, 1],
+    "switch.margin": [0.5, 2.0, 0.05],
+    "pincer_weight": [0.4, 1.7, 0.04],
+    "near_target_aggro": [1.2, 3.2, 0.05],
+    "escape_bonus": [0.4, 1.4, 0.04],
+    "movement[0].blend": [0.0, 1.0, 0.05],
+    "movement[1].blend": [0.0, 1.0, 0.05]
+  },
+  "bounds": {
+    "pincer_weight": [0.4, 1.7, 0.04],
+    "near_target_aggro": [1.2, 3.2, 0.05]
+  },
+  "base": {
+    "speed_base": 1.3,
+    "turn_base": 14.0,
+    "size": 20
+  }
+}

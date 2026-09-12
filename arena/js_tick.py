@@ -153,11 +153,19 @@ def blend_headings(a, b, w):
     return math.atan2(x, -y)
 
 
+def _body_vel(p):
+    if getattr(p, 'vx', None) is not None and getattr(p, 'vy', None) is not None:
+        return float(p.vx), float(p.vy)
+    sp = float(getattr(p, 'speed', 0) or 0)
+    return math.sin(p.angle) * sp, -math.cos(p.angle) * sp
+
+
 def chase_heading(p, prey, look):
     if prey is None:
         return None
-    px = prey.x + math.sin(prey.angle) * prey.speed * look
-    py = prey.y - math.cos(prey.angle) * prey.speed * look
+    vx, vy = _body_vel(prey)
+    px = prey.x + vx * look
+    py = prey.y + vy * look
     return heading_to(p.x, p.y, px, py)
 
 
@@ -454,8 +462,9 @@ def intercept_heading(p, prey, mode):
     if prey is None:
         return None
     if mode == 'chord':
-        px = prey.x + math.sin(prey.angle) * prey.speed * 6
-        py = prey.y - math.cos(prey.angle) * prey.speed * 6
+        vx, vy = _body_vel(prey)
+        px = prey.x + vx * 6
+        py = prey.y + vy * 6
         return heading_to(p.x, p.y, px, py)
     return chase_heading(p, prey, 18)
 
@@ -533,7 +542,7 @@ def apply_moves(want, steps, ctx):
             lst = [{'fn': 'sectors.chase_heading', 'blend': 0.85}] + lst
     elif state in ('LAST_MAN', 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE'):
         keep = [{'fn': 'sectors.orient', 'blend': 0.8}]
-        raid = state == 'LAST_MAN' and prey_n > 0
+        raid = (state == 'LAST_MAN' and prey_n > 0) or state == 'NEAR_WIPE'
         for s in lst:
             fn = str((s or {}).get('fn') or '')
             if (not raid) and fn.startswith(('orbit.', 'time.', 'intercept.')):
@@ -568,6 +577,8 @@ def apply_moves(want, steps, ctx):
             return lane_heading(p, W, H, prey)
         if fn in ('intercept.heading', 'intercept.lead'):
             return intercept_heading(p, prey, 'lead')
+        if fn in ('intercept.fear', 'intercept.block'):
+            return intercept_heading(p, fear, 'lead')
         if fn == 'intercept.chord':
             return intercept_heading(p, prey, 'chord')
         if fn == 'desync.heading':

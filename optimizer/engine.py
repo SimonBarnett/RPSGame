@@ -3560,7 +3560,7 @@ class StrategyOptimizer:
         return sid in (
             'PACK_HUNT', 'SCREEN_HUNT', 'OPEN_KITE', 'ESCORT_RING',
             'CLEAR_SPLIT', 'CLEAR_FAN', 'LANE_SWEEP', 'CROSS_LANE',
-            'CHOKE_PINCH', 'DENSITY_RAID', 'ETA_STRIKE',
+            'CHOKE_PINCH', 'DENSITY_RAID', 'ETA_STRIKE', 'BODY_CHECK',
         )
 
     def _bo_ei_step(self):
