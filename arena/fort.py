@@ -115,51 +115,24 @@ class FortLOS:
 
 
 def place_forts(world):
-    """Symmetric fort layout. Writes world.fort_list."""
-    C = _config()
+    """JS-identical fort ring (arena.layout). Radius scales with min(W,H)/720."""
+    from arena.layout import world_metrics, place_forts as _place, make_rand
     world.fort_list = []
     n = max(0, int(getattr(world, 'forts', 0)))
     if n == 0:
         return
-    margin = C.FORT_EDGE
-    cx, cy = world.width / 2, world.height / 2
-    seeds = []
-    attempts = 0
-    need = (n + 3) // 4
-    while len(seeds) < need and attempts < 250:
-        attempts += 1
-        r = random.uniform(C.FORT_MIN_R, C.FORT_MAX_R)
-        dist = random.uniform(min(world.width, world.height) * 0.17,
-                              min(world.width, world.height) * 0.37)
-        ang = random.uniform(0.12, math.pi / 2 - 0.12)
-        x = cx + dist * math.cos(ang)
-        y = cy + dist * math.sin(ang)
-        x = max(margin + r, min(world.width - margin - r, x))
-        y = max(margin + r, min(world.height - margin - r, y))
-        if all(math.hypot(x - sx, y - sy) >= r + sr + C.FORT_MIN_SEP * 0.55 for sx, sy, sr in seeds):
-            seeds.append((x, y, r))
-    final = []
-    for x, y, r in seeds:
-        for fx, fy in ((x, y), (2 * cx - x, y), (x, 2 * cy - y), (2 * cx - x, 2 * cy - y)):
-            if any(math.hypot(fx - ox, fy - oy) < r * 1.4 for ox, oy, _ in final):
-                continue
-            final.append((fx, fy, r))
-            if len(final) >= n:
-                break
-        if len(final) >= n:
-            break
-    while len(final) < n and attempts < 400:
-        attempts += 1
-        r = random.uniform(C.FORT_MIN_R, C.FORT_MAX_R)
-        dist = random.uniform(min(world.width, world.height) * 0.2,
-                              min(world.width, world.height) * 0.4)
-        ang = random.uniform(0, 2 * math.pi)
-        x = max(margin + r, min(world.width - margin - r, cx + dist * math.cos(ang)))
-        y = max(margin + r, min(world.height - margin - r, cy + dist * math.sin(ang)))
-        if any(math.hypot(x - ox, y - oy) < r + orr + C.FORT_MIN_SEP * 0.5 for ox, oy, orr in final):
-            continue
-        final.append((x, y, r))
-    world.fort_list = [Fort(x, y, r) for x, y, r in final[:n]]
+    m = world_metrics(world.width, world.height)
+    rng = getattr(world, '_layout_rng', None)
+    if rng is None:
+        from arena.layout import mulberry32
+        seed = int(getattr(world, 'match_seed', 0) or 0)
+        if seed <= 0:
+            seed = random.randint(1, 2 ** 31 - 1)
+            world.match_seed = seed
+        rng = mulberry32(seed)
+        world._layout_rng = rng
+    laid = _place(m['W'], m['H'], n, m['pad'], make_rand(rng))
+    world.fort_list = [Fort(row['x'], row['y'], row['r']) for row in laid]
     for f in world.fort_list:
         f.scale = 0.0
 

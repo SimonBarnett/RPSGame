@@ -256,18 +256,16 @@ class Metrics:
             fear = self.w.type_counts.get(FEAR_OF[t], 0)
             prey = self.w.type_counts.get(PREY_OF[t], 0)
             self_c = team.count
-            if fear > 0 and prey <= 0:
-                state = 'NO_PREY_FEAR_ALIVE'
-            elif fear <= 0 and prey > 0:
-                state = 'CLEAR_HUNT'
-            elif fear > 0 and prey <= 3:
-                state = 'LAST_PREY_RISK'
-            elif fear > self_c:
-                state = 'OUTNUMBERED'
-            elif self_c <= 3:
-                state = 'SMALL_UNIT'
-            else:
-                state = 'CONTESTED'
+            try:
+                from strategies.playbook import match_state as _match_state
+                state = _match_state(self_c, fear, prey)
+            except Exception:
+                if fear > 0 and prey <= 0:
+                    state = 'NO_PREY_FEAR_ALIVE'
+                elif fear <= 0 and prey > 0:
+                    state = 'CLEAR_HUNT'
+                else:
+                    state = 'CONTESTED'
             bucket = self.state_ticks[t.name]
             bucket[state] = bucket.get(state, 0) + 1
             sst = self.strategy_state_ticks.setdefault(t.name, {})
@@ -860,7 +858,7 @@ class Metrics:
             total = sum(self.mode_ticks[tname].values()) or 1
             return round(self.mode_ticks[tname][mname] / total, 3)
 
-        wname = winner_type.name if winner_type else '?'
+        wname = winner_type.name if winner_type else 'NONE'
         wipe = {'ROCK': 0, 'PAPER': 0, 'SCISSORS': 0}
         for c in self.conversions:
             try:
@@ -884,10 +882,14 @@ class Metrics:
         imb_list = [float(c.get('flank_imbalance') or 0) for c in self.conversions]
         avg_pack_density = sum(dens_list) / max(1, len(dens_list))
         avg_flank_imbalance = sum(imb_list) / max(1, len(imb_list))
-        wtype = winner_type if winner_type else ParticleType.ROCK
+        wtype = winner_type if winner_type else None
         try:
-            fear_left = counts.get(FEAR_OF[wtype].name, 0)
-            prey_left = counts.get(PREY_OF[wtype].name, 0)
+            if wtype is not None:
+                fear_left = counts.get(FEAR_OF[wtype].name, 0)
+                prey_left = counts.get(PREY_OF[wtype].name, 0)
+            else:
+                fear_left = 0
+                prey_left = 0
         except Exception:
             fear_left = 0
             prey_left = 0
@@ -1007,8 +1009,11 @@ class Metrics:
                                 mode_ticks[tn].setdefault(sid, {})[md] = mode_ticks[tn].setdefault(sid, {}).get(md, 0) + int(n or 0)
                     else:
                         mode_ticks[tn] = modes
+            import time as _time
+            _t_credit = _time.perf_counter()
             playbook.credit_decisions({
-                'winner': winner_type.name if hasattr(winner_type, 'name') else str(winner_type),
+                'winner': winner_type.name if hasattr(winner_type, 'name') else (str(winner_type) if winner_type else 'NONE'),
+                'teamSize': getattr(self.w, 'teamSize', None),
                 'ticks': getattr(self, 'strategy_ticks', {}),
                 'mode_ticks': mode_ticks,
                 'state_ticks': getattr(self, 'strategy_state_ticks', {}) or {},
@@ -1023,7 +1028,9 @@ class Metrics:
                     if getattr(self.w, '_endgame_type', None) is not None else ''),
             })
             try:
-                playbook.write_grok_brief(self)
+                if hasattr(self.w, 'optimizer') and hasattr(self.w.optimizer, '_log_raw'):
+                    self.w.optimizer._log_raw('timing credit=%.0fms' % (
+                        (_time.perf_counter() - _t_credit) * 1000.0))
             except Exception:
                 pass
             try:
@@ -1036,6 +1043,11 @@ class Metrics:
                     self.w.optimizer._log_raw('credit_decisions failed: %s' % e)
             except Exception:
                 pass
+        try:
+            from optimizer import mcts as _mcts
+            _mcts.flush()
+        except Exception:
+            pass
 
     def write_summary(self):
         """Aggregate all games into actionable tuning notes."""

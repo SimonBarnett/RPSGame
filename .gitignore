@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+speed_debug.log
+optimizer/metrics/*.tmp
+optimizer/metrics/*.tmp.csv
+*.tmp.json
+.git/hooks/post-commit

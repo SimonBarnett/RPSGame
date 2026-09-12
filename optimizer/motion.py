@@ -204,8 +204,16 @@ def _sync_runtime(ident):
                 if not isinstance(ov, dict):
                     continue
                 base = dict(ov.get("base") or {})
-                base["speed_base"] = d["speed_base"]
-                base["turn_base"] = d["turn_base"]
+                sp, tu = d["speed_base"], d["turn_base"]
+                try:
+                    same = (abs(float(base.get("speed_base") or 0) - float(sp)) < 1e-9
+                            and abs(float(base.get("turn_base") or 0) - float(tu)) < 1e-9)
+                except Exception:
+                    same = False
+                if same:
+                    continue
+                base["speed_base"] = sp
+                base["turn_base"] = tu
                 ov["base"] = base
                 bag[name][sid] = ov
                 try:

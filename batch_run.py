@@ -22,7 +22,7 @@ Config.TARGET_FPS = 0
 Config.AI_BUDGET = 8
 Config.TEAM_UPDATE_EVERY = 4
 Config.FAST_SIM_PHYS_STEPS = 3
-Config.FAST_SIM_AI_EVERY = 2
+Config.FAST_SIM_AI_EVERY = 1
 
 from arena import Arena
 

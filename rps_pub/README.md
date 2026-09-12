@@ -1,5 +1,7 @@
 # RPS web embed + PWA
 
+Strategy JSON is the same tree as the Python sim. Learning (UCB, GP-EI, persist) lives only in Python. After each learn pass, `playbook.publish_to_js()` copies `strategies/*.json` into this folder. You can also copy `strategies/types/` here by hand — JS reads those files directly (`when.states`, `switch`, `movement`, `weights`, `base`, `stats` for greedy pick).
+
 ## AWS folder (installable app)
 
 ```

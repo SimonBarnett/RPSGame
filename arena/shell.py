@@ -970,6 +970,8 @@ class Arena:
 
     def gameover(self):
         """True only after TITLE has played – outer loop can reset into next match."""
+        if getattr(Config, 'FAST_SIM', False) and getattr(self, '_js_match_over', False):
+            return True
         return getattr(self, 'phase', MatchPhase.PLAYING) == MatchPhase.READY
 
     def visible_type_counts(self):
@@ -1039,43 +1041,15 @@ class Arena:
             self.spatial.rebuild(self.particles)
             perf and perf.end('spatial')
 
-        # Physics + AI only while PLAYING
+        # Physics + AI: JS-identical tick (arena/js_tick.py).
         if playing and self.particles:
-            n = len(self.particles)
-            fast = getattr(Config, 'FAST_SIM', False)
-            steps = max(1, int(getattr(Config, 'FAST_SIM_PHYS_STEPS', 1) if fast else 1))
             perf and perf.begin('physics')
-            for _ in range(steps):
-                for i, p in enumerate(self.particles):
-                    p.move()
-                    p.bounce()
-                    p.collide_forts()
-                    if i == 0:
-                        span = self.particles[0].size * 2.5
-                        for a, b in self.spatial.query_pairs(self.particles, span):
-                            self.collide(a, b)
+            from arena import js_tick
+            js_tick.step(self, move=True)
             perf and perf.end('physics')
-            ai_every = max(1, int(getattr(Config, 'FAST_SIM_AI_EVERY', 1) if fast else 1))
-            run_ai = (not fast) or (self.runcount % ai_every == 0)
-            budget = min(n, getattr(Config, 'AI_BUDGET', 10))
-            if n and budget and run_ai:
-                perf and perf.begin('command')
-                start = getattr(self, '_ai_cursor', 0) % n
-                for k in range(budget):
-                    self.particles[(start + k) % n].command(fast=True)
-                self._ai_cursor = (start + budget) % n
-                perf and perf.end('command')
         elif countdown and self.particles:
-            # Orient only: choose heading + turn in place, no translation
-            n = len(self.particles)
-            budget = min(n, getattr(Config, 'AI_BUDGET', 10))
-            if n and budget:
-                start = getattr(self, '_ai_cursor', 0) % n
-                for k in range(budget):
-                    self.particles[(start + k) % n].command(fast=True)
-                self._ai_cursor = (start + budget) % n
-            for p in self.particles:
-                p.orient_in_place()
+            from arena import js_tick
+            js_tick.step(self, move=False)
 
         # Presentation (arena.py)
         if not getattr(Config, 'FAST_SIM', False):
@@ -1189,6 +1163,11 @@ class Arena:
         toggle_fullscreen(self)
 
     def reset(self, gameid=None):
+        try:
+            import strategies.playbook as _pb
+            _pb.set_match_context(getattr(self, 'teamSize', None))
+        except Exception:
+            pass
         # Flush last match BEFORE wipe. Title-phase flush used to run after
         # reset_match() which zeroed conversions — brief stats stayed empty
         # and the first TITLE frame paid for a 2–5s optimise+persist.
@@ -1212,6 +1191,20 @@ class Arena:
         self.runcount = 0
         self.command = 0
         self._ai_cursor = 0
+        self._js_hold = {
+            'ROCK': {'card': None, 'frames': 0},
+            'PAPER': {'card': None, 'frames': 0},
+            'SCISSORS': {'card': None, 'frames': 0},
+        }
+        self._js_voronoi = {'key': '', 'map': {}}
+        self._js_tick_i = 0
+        self._js_sized = False
+        self._js_alive_one = False
+        self._js_winner_seen = False
+        self._js_match_over = False
+        self._layout_rng = None
+        pinned = getattr(self, '_pin_match_seed', None)
+        self.match_seed = int(pinned) if pinned else random.randint(1, 2 ** 31 - 1)
         self._last_man_start_rc = {}
         self._last_man_frames = {}
         self._last_man_hunter = {}
@@ -1272,19 +1265,41 @@ class Arena:
                 self.startpos.append((tval, x, y, ang))
             self._replay_startpos = None
         else:
-            self.newGame()
-            for n in self.particles:
-                self.startpos.append(n.reset())
-                n.speed = n.maxspeed()  # start at cruise, frozen until PLAYING
+            from arena.layout import world_metrics, spawn_particles, make_rand, mulberry32
+            from config import TYPE_DEFAULTS as _TD
+            m = world_metrics(self.width, self.height)
+            rng = getattr(self, '_layout_rng', None)
+            if rng is None:
+                seed = int(getattr(self, 'match_seed', 0) or 0) or random.randint(1, 2 ** 31 - 1)
+                self.match_seed = seed
+                rng = mulberry32(seed)
+                self._layout_rng = rng
+            forts = [{'x': f.x, 'y': f.y, 'r': f.radius} for f in self.fort_list]
+            laid = spawn_particles(
+                m['W'], m['H'], self.teamSize, forts, m['pad'], m['body'], make_rand(rng))
+            for row in laid:
+                p = _sim().Particle(self, ParticleType[row['type']])
+                p.id = int(row['id'])
+                p.x = float(row['x'])
+                p.y = float(row['y'])
+                p.angle = float(row['angle'])
+                p.type = p.starttype
+                p.size = m['body']
+                d = _TD[p.type.name]
+                sr, ar, br = d['strength_range'], d['agility_range'], d['bravery_range']
+                p.strength = random.uniform(sr[0], sr[1])
+                p.agility = random.uniform(ar[0], ar[1])
+                p.bravery = random.uniform(br[0], br[1])
+                from arena.js_tick import DEFAULT_MOTION, CRUISE_MULT
+                mot = float((DEFAULT_MOTION.get(p.type.name) or {}).get('speed') or 1.3)
+                p.speed = mot * CRUISE_MULT * 0.1 * m['worldK']
+                p.assign_role()
+                self.particles.append(p)
+                self.startpos.append((p.type.value, p.x, p.y, p.angle))
         rise = getattr(Config, 'PARTICLE_RISE_PX', 220)
         base = getattr(Config, 'PARTICLE_STAGGER_MS', 40)
-        # Interleaved list order R-P-S-R-P-S…; randomise delay around cumulative stagger
-        t = 0
-        for p in self.particles:
-            # random-ish gap like before, but types alternate in the queue
-            gap = max(10, int(base * random.uniform(0.55, 1.45)))
-            p._intro_delay_ms = t
-            t += gap
+        for i, p in enumerate(self.particles):
+            p._intro_delay_ms = (i % 3) * 70 + (i // 3) * base
             p._vis_y_offset = float(rise)
             p._vis_scale = 0.05
         self._particles_placed = True
@@ -1422,7 +1437,7 @@ class Arena:
             self.frozen_match_ms = 0
             self._set_phase(MatchPhase.PLAYING)
         elif self.phase == MatchPhase.PLAYING:
-            if self.all_same_type():
+            if getattr(self, '_js_match_over', False):
                 now = pygame.time.get_ticks()
                 self.gameover_start_ticks = now
                 self.frozen_match_ms = (now - self.match_start_ticks) if self.match_start_ticks else 0

@@ -114,25 +114,42 @@ class StrategyOptimizer:
                 return path
         return log_path(filename)
 
-    def _load_games(self):
+    def _tail_csv_lines(self, path, window, byte_window=250000):
+        """Header + last `window` rows without reading the whole NAS file."""
         import os
-        path = self._metrics_path(StrategyOptimizer.GAMES_CSV)
-        if not os.path.exists(path):
-            return []
+        if not path or not os.path.exists(path):
+            return [], []
         try:
-            with open(path, encoding='utf-8') as f:
-                lines = f.read().strip().split('\n')
+            with open(path, 'rb') as f:
+                header_line = f.readline().decode('utf-8', 'ignore').strip()
+                f.seek(0, 2)
+                size = f.tell()
+                f.seek(max(0, size - int(byte_window)), 0)
+                raw = f.read().decode('utf-8', 'ignore')
         except Exception:
-            return []
-        if len(lines) < 2:
-            return []
-        headers = lines[0].split(',')
+            return [], []
+        headers = [h.strip() for h in header_line.split(',') if h.strip()]
+        lines = raw.strip().split('\n')
+        if not lines:
+            return headers, []
+        if headers and lines[0].split(',')[0] != headers[0]:
+            lines = lines[1:]
+        elif headers and lines[0].split(',')[0] == headers[0]:
+            lines = lines[1:]
+        return headers, lines[-int(window):]
+
+    def _load_games(self):
+        path = self._metrics_path(StrategyOptimizer.GAMES_CSV)
+        window = max(50, int(self.SAMPLE_WINDOW))
+        headers, lines = self._tail_csv_lines(path, window, byte_window=400000)
         games = []
-        for line in lines[1:]:
+        for line in lines:
             parts = line.split(',')
             if len(parts) < 6:
                 continue
-            g = dict(zip(headers, parts))
+            g = dict(zip(headers, parts)) if headers else {}
+            if not g:
+                continue
             try:
                 g['_duration'] = float(g.get('duration_s', 0))
                 g['_conversions'] = int(float(g.get('total_conversions', 0)))
@@ -142,6 +159,42 @@ class StrategyOptimizer:
                 continue
             games.append(g)
         return games
+
+    def _overlay_eligible(self, used, ov, min_used=8, min_games=4):
+        """Played this match enough, or a lifetime card that showed up at all."""
+        u = int(used or 0)
+        st = (ov or {}).get('stats') or {}
+        life = int(st.get('ticks') or 0)
+        games = int(st.get('games') or 0)
+        sid = str((ov or {}).get('id') or '')
+        if sid in self._CARE_SIDS:
+            min_used = 1
+        else:
+            try:
+                states = list(((ov or {}).get('when') or {}).get('states') or [])
+                primary = str(states[0]).upper() if states else ''
+                if primary in (
+                        'LAST_PREY_RISK', 'LAST_MAN', 'NO_PREY_FEAR_ALIVE',
+                        'NEAR_WIPE', 'OUTNUMBERED'):
+                    min_used = 1
+            except Exception:
+                pass
+        return u >= int(min_used) or (u >= 1 and (life >= 60 or games >= int(min_games)))
+
+    def _overlay_dom_state(self, tname, sid, ov=None):
+        """State this card occupied most this match, else its primary when.states."""
+        metrics = getattr(getattr(self, 'w', None), 'metrics', None)
+        bag = {}
+        if metrics is not None:
+            bag = ((getattr(metrics, 'strategy_state_ticks', {}) or {}).get(tname) or {}).get(sid) or {}
+        if isinstance(bag, dict) and bag:
+            try:
+                return str(max(bag.items(), key=lambda kv: int(kv[1] or 0))[0]).upper()
+            except Exception:
+                pass
+        if ov:
+            return self._map_state_for(ov)
+        return 'CONTESTED'
 
 
     def _adaptive_learning_rates(self, fitness, f_bar, share=None):
@@ -177,22 +230,38 @@ class StrategyOptimizer:
             # pressure term: 0 → ~0.75x, 0.2 → ~1.35x
             p_gain = float(getattr(self, 'LR_PRESSURE_GAIN', 1.8))
             p_m = 0.75 + p_gain * min(0.35, pressure)
-            # Bound saturation: fraction of STRATEGY_KEYS within 2% of lo/hi
+            # Bound saturation on played overlay tunables, not TYPE_DEFAULTS.
             sat = 0.0
             try:
-                d = TYPE_DEFAULTS.get(t, {})
+                import strategies.playbook as _pb
+                metrics = getattr(getattr(self, 'w', None), 'metrics', None)
+                used = {}
+                if metrics is not None:
+                    used = (getattr(metrics, 'strategy_ticks', {}) or {}).get(t) or {}
                 n_keys = 0
                 n_sat = 0
-                for k in STRATEGY_KEYS:
-                    if k not in STRATEGY_BOUNDS or k not in d:
+                for sid, ov in (_pb.TEAM_OVERLAYS.get(t) or {}).items():
+                    if not self._overlay_eligible(used.get(sid, 0), ov):
                         continue
-                    n_keys += 1
-                    blo, bhi, _ = STRATEGY_BOUNDS[k]
-                    blo, bhi = float(blo), float(bhi)
-                    span = max(1e-9, bhi - blo)
-                    v = float(d[k])
-                    if (v - blo) / span <= 0.02 or (bhi - v) / span <= 0.02:
-                        n_sat += 1
+                    tun = _pb.tunables_for(t, sid) or {}
+                    wts = dict(ov.get('weights') or {})
+                    for path, bounds in tun.items():
+                        if str(path).startswith('switch.') or str(path).startswith('when.') or str(path).startswith('movement['):
+                            continue
+                        if not isinstance(bounds, (list, tuple)) or len(bounds) < 2:
+                            continue
+                        v = wts.get(path)
+                        if v is None:
+                            continue
+                        try:
+                            v = float(v)
+                            blo, bhi = float(bounds[0]), float(bounds[1])
+                        except Exception:
+                            continue
+                        n_keys += 1
+                        span = max(1e-9, bhi - blo)
+                        if (v - blo) / span <= 0.02 or (bhi - v) / span <= 0.02:
+                            n_sat += 1
                 sat = (n_sat / n_keys) if n_keys else 0.0
             except Exception:
                 sat = 0.0
@@ -229,6 +298,8 @@ class StrategyOptimizer:
         """Nudge a per-type strategy key; strength scales step (replicator weight)."""
         # Type identity (prey/fear/colour) stays frozen. speed/turn live on
         # strategy.base and may be tuned when that strategy lists them.
+        if getattr(self, 'SINGLE_KNOB_WRITER', True):
+            return
         if key in ('strength_range', 'agility_range',
                    'bravery_range', 'prey', 'fear', 'display_name', 'icon', 'color'):
             return
@@ -351,7 +422,7 @@ class StrategyOptimizer:
     GA_MUTATION_RATE = 0.14      # per-gene mutation probability
     GA_MUTATION_SIGMA = 0.45     # fraction of bound step for Gaussian noise
     GA_BLEND_ALPHA = 0.35        # blend crossover weight toward fitter parent
-    GA_DEPLOY_ELITE = True       # write island champion into strategy overlay
+    GA_DEPLOY_ELITE = False      # islands are unevaluated — archive only, do not write overlays
     GA_CROSS_TYPE = True         # coevolve: same strategy_id may breed across types
     GA_CROSS_TYPE_RATE = 0.22
     GA_MAX_ISLANDS = 36          # cap work per pass (3 types × top used cards)
@@ -363,7 +434,7 @@ class StrategyOptimizer:
     COEVO_WINDOW = 400           # recent conversion rows
     COEVO_WEIGHT = 0.22          # mix into strategy fitness
     # --- Particle Swarm Optimization (per-type swarms) ---
-    PSO_ENABLED = True
+    PSO_ENABLED = False          # deferred 100-D swarm never evaluates non-deployed particles
     PSO_SWARM_SIZE = 12          # particles per type
     PSO_W_MAX = 0.9              # inertia start (explore)
     PSO_W_MIN = 0.35             # inertia floor (exploit) — slightly lower for high-D polish
@@ -392,7 +463,10 @@ class StrategyOptimizer:
     PSO_CHI = 0.729843788128     # 2/|2-φ-sqrt(φ(φ-2))| at φ=4.1
     PSO_VMAX_FRAC = 0.2          # |v| ≤ frac * (hi-lo) per dim
     PSO_REINIT_FRAC = 0.08       # chance worst particle re-spawns
-    PSO_DEPLOY_GBEST = True      # write gbest into TYPE_DEFAULTS each pass
+    PSO_DEPLOY_GBEST = False     # do not write unevaluated swarm gbest
+    SINGLE_KNOB_WRITER = True    # one of GP-EI / playbook per generation; no replicator spray
+    EXTRA_KNOB_WRITERS = False   # last-man / strike / ally / threat / unherd type-wide nudges
+    BO_MAX_PER_TYPE = 2          # EI writes at most this many played cards per type
     PAYOFF_CSV = log_path('metrics_payoff.csv')
     # Adaptive learning rates (selection + mutation scaled each generation)
     LR_BASE = 1.0
@@ -1366,14 +1440,18 @@ class StrategyOptimizer:
             return 'CONTESTED'
         return str(states[0]).upper()
 
-    def _map_update(self, pb, team_size):
+    def _map_update(self, pb, team_size, state_for=None):
         if not getattr(self, 'MAP_ELITES_ENABLED', True):
             return
+        if not self._ga_islands:
+            self._map_seed_neighbors()
+            return 0
         bucket = self._map_team_bucket(team_size)
         filled = 0
+        state_for = state_for or {}
         for (t, sid), island in self._ga_islands.items():
             ov = (pb.TEAM_OVERLAYS.get(t) or {}).get(sid) or {}
-            state = self._map_state_for(ov)
+            state = state_for.get((t, sid)) or self._map_state_for(ov)
             niche = (state, bucket, t)
             fit = island['fit'][0] if island['fit'] else 0.0
             genome = dict(island['pop'][0]) if island['pop'] else {}
@@ -1389,7 +1467,37 @@ class StrategyOptimizer:
                 filled += 1
             elif prev is not None:
                 prev['visits'] = int(prev.get('visits', 0)) + 1
+        self._map_seed_neighbors()
         return filled
+
+    def _map_seed_neighbors(self):
+        """Copy a filled (state, type) into the adjacent empty team bucket."""
+        edges = list(getattr(self, 'MAP_TEAM_BUCKETS', (8, 12, 16, 24)))
+        occupied = list((self._map_elites or {}).items())
+        n_seed = 0
+        for (state, bucket, t), slot in occupied:
+            try:
+                i = edges.index(int(bucket))
+            except (ValueError, TypeError):
+                continue
+            neighbors = []
+            if i > 0:
+                neighbors.append(edges[i - 1])
+            if i < len(edges) - 1:
+                neighbors.append(edges[i + 1])
+            for b in neighbors:
+                niche = (state, b, t)
+                if niche in (self._map_elites or {}):
+                    continue
+                self._map_elites[niche] = {
+                    'fitness': 0.85 * float(slot.get('fitness', 0) or 0),
+                    'type': t,
+                    'sid': slot.get('sid'),
+                    'genome': dict(slot.get('genome') or {}),
+                    'visits': 0,
+                }
+                n_seed += 1
+        return n_seed
 
     def _map_persist(self, pb):
         """Write archive + empty-niche suggestions for Grok."""
@@ -1409,6 +1517,10 @@ class StrategyOptimizer:
             path = grok_path('map_elites.json')
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump({'cells': cells, 'gen': self._ga_gen}, f, indent=2)
+            try:
+                pb.set_map_cells(cells)
+            except Exception:
+                pass
             # Known states × buckets × types
             states = set()
             for t in ('ROCK', 'PAPER', 'SCISSORS'):
@@ -1571,20 +1683,66 @@ class StrategyOptimizer:
                     )
         except Exception as e:
             self._log_raw('coevo champions failed: %s' % e)
-        self._ga_evolve_islands()
-        self._ga_deploy_islands(pb)
-        sample = getattr(self, '_last_sample_games', None) or []
+        if getattr(self, 'GA_DEPLOY_ELITE', False):
+            self._ga_evolve_islands()
+            self._ga_deploy_islands(pb)
+        else:
+            self._log_raw('GA skip evolve/deploy (unevaluated island genomes)')
         avg_team = REF_TEAM_SIZE
-        if sample:
-            try:
-                avg_team = sum(int(float(g.get('teamSize', REF_TEAM_SIZE)))
-                               for g in sample) / max(1, len(sample))
-            except Exception:
-                pass
+        try:
+            ww = getattr(self, 'w', None)
+            if ww is not None and getattr(ww, 'teamSize', None):
+                avg_team = int(ww.teamSize)
+        except Exception:
+            pass
         self._map_update(pb, avg_team)
         self._map_persist(pb)
 
+    def _map_archive_step(self, fitness_map, wipe_risk, share=None):
+        """Score live overlays into MAP-Elites. Never deploy island genomes."""
+        if not getattr(self, 'MAP_ELITES_ENABLED', True):
+            return
+        prev = getattr(self, 'GA_DEPLOY_ELITE', False)
+        self.GA_DEPLOY_ELITE = False
+        try:
+            self._ga_strategy_step(fitness_map, wipe_risk, share)
+        finally:
+            self.GA_DEPLOY_ELITE = prev
 
+    def _map_fill_live(self, fitness_map, wipe_risk, team_size):
+        """Occupy this match's team bucket from live overlays. No island evolve."""
+        if not getattr(self, 'MAP_ELITES_ENABLED', True):
+            return
+        pb = self._ga_pb()
+        self._coevo_load_payoff()
+        mix = self._coevo_mix(pb)
+        metrics = getattr(getattr(self, 'w', None), 'metrics', None)
+        ticks_all = getattr(metrics, 'strategy_ticks', {}) if metrics is not None else {}
+        if self._ga_islands is None:
+            self._ga_islands = {}
+        n_fill = 0
+        state_for = {}
+        for tname in ('ROCK', 'PAPER', 'SCISSORS'):
+            used = ticks_all.get(tname) or {}
+            bag = pb.TEAM_OVERLAYS.get(tname) or {}
+            for sid, ov in bag.items():
+                if not self._overlay_eligible(used.get(sid, 0), ov):
+                    continue
+                live, tun = self._ga_read_genome(pb, tname, sid)
+                if not tun:
+                    continue
+                score = self._strategy_fitness(
+                    tname, sid, ov, fitness_map, wipe_risk, mix)
+                self._ga_islands[(tname, sid)] = {
+                    'pop': [live], 'fit': [score], 'tun': tun,
+                }
+                state_for[(tname, sid)] = self._overlay_dom_state(tname, sid, ov)
+                n_fill += 1
+        ts = float(team_size or REF_TEAM_SIZE)
+        self._map_update(pb, ts, state_for=state_for)
+        self._map_persist(pb)
+        if n_fill:
+            self._log_raw('MAP-Elites live fill cards=%d team=%.0f' % (n_fill, ts))
 
     # ------------------------------------------------------------------
     # Particle Swarm Optimization — continuous refinement of STRATEGY_KEYS
@@ -1975,6 +2133,8 @@ class StrategyOptimizer:
 
 
     def optimise(self, recent_only=None, persist=True):
+        import time as _time
+        _t_opt = _time.perf_counter()
         try:
             from optimizer.perf import get_perf
             get_perf(getattr(self, 'w', None)).begin('optimise')
@@ -2114,12 +2274,10 @@ class StrategyOptimizer:
                 self._last_lr = {'ROCK': 1.0, 'PAPER': 1.0, 'SCISSORS': 1.0}
                 self._log_raw(f'adaptive_lr failed: {_lr_e}')
 
-            self._replicator_update(fitness, share, f_bar, wipe_risk, avg_team, avg_dur)
-            try:
-                self._optimise_playbook(fitness, f_bar, wins)
-            except Exception as _pb:
-                self._log_raw(f'playbook strategy pass failed: {_pb}')
-
+            # One knob writer per generation: GP-EI (heavy) XOR playbook
+            # tunables of cards that actually played. Replicator fitness /
+            # simplex still ran above for logs + adaptive LR. Type-wide
+            # replicator spray, mutation, GA deploy, and PSO are off.
             every = max(1, int(getattr(self, 'LEARN_EVERY_HEAVY', 10)))
             heavy = (n >= int(getattr(self, 'MIN_GAMES_GA', 8))
                      and (int(self.GENERATION) % every == 0))
@@ -2131,71 +2289,73 @@ class StrategyOptimizer:
                              and n >= int(getattr(self, 'MIN_GAMES_GA', 8)))
             except Exception:
                 pass
-            if not heavy:
-                self._log_raw(
-                    'skip mutation/GA/PSO (n=%d gen=%d every=%d)' % (
-                        n, self.GENERATION, every))
+
+            try:
+                import strategies.playbook as _pb
+                _pb.EXPLORE_TYPES = {
+                    t for t in ('ROCK', 'PAPER', 'SCISSORS')
+                    if float(fitness.get(t, 0) or 0) < float(f_bar or 0)
+                }
+            except Exception:
+                pass
 
             try:
                 self._bo_record()
             except Exception as _bor:
                 self._log_raw('BO record failed: %s' % _bor)
 
+            ei_done = set()
+            writer = None
             if heavy:
                 try:
                     before = len(self.last_changes)
-                    self._bo_ei_step()
+                    ei_done = self._bo_ei_step() or set()
                     ei_n = len(self.last_changes) - before
-                    self._log_raw('GP-EI changes=%d' % ei_n)
+                    self._log_raw('GP-EI changes=%d cards=%d' % (ei_n, len(ei_done)))
+                    if ei_done:
+                        writer = 'gp-ei'
                 except Exception as _boe:
-                    ei_n = 0
+                    ei_done = set()
                     self._log_raw('GP-EI failed: %s' % _boe)
-                if ei_n <= 0:
-                    try:
-                        before = len(self.last_changes)
-                        self._mutate_traits(fitness, f_bar)
-                        mut_n = len(self.last_changes) - before
-                        self._log_raw(f'mutation: {mut_n} trait jitters (rate={self.MUTATION_RATE}, str={self.MUTATION_STRENGTH})')
-                    except Exception as _me:
-                        self._log_raw(f'mutation failed: {_me}')
-                else:
-                    self._log_raw('skip mutation/GA/PSO (GP-EI proposed)')
-                if ei_n <= 0:
-                    try:
-                        before = len(self.last_changes)
-                        self._ga_step(fitness, wipe_risk, share)
-                        ga_n = len(self.last_changes) - before
-                        self._log_raw(
-                            f'GA complete gen={getattr(self, "_ga_gen", 0)} '
-                            f'changes={ga_n} enabled={getattr(self, "GA_ENABLED", True)}'
-                        )
-                    except Exception as _gae:
-                        self._log_raw(f'GA failed: {_gae}')
-                    try:
-                        before = len(self.last_changes)
-                        self._pso_step(fitness, wipe_risk, share)
-                        pso_n = len(self.last_changes) - before
-                        self._log_raw(
-                            f'PSO complete gen={getattr(self, "_pso_gen", 0)} '
-                            f'changes={pso_n} enabled={getattr(self, "PSO_ENABLED", True)}'
-                        )
-                    except Exception as _psoe:
-                        self._log_raw(f'PSO failed: {_psoe}')
+
+            try:
+                self._optimise_playbook(fitness, f_bar, wins, skip=ei_done)
+                writer = ('gp-ei+playbook' if ei_done else 'playbook')
+            except Exception as _pb:
+                self._log_raw(f'playbook strategy pass failed: {_pb}')
+                if writer is None:
+                    writer = 'none'
+
+            ts = REF_TEAM_SIZE
+            try:
+                ww = getattr(self, 'w', None)
+                if ww is not None and getattr(ww, 'teamSize', None):
+                    ts = int(ww.teamSize)
+            except Exception:
+                pass
+            try:
+                import strategies.playbook as _pb
+                _pb.set_match_context(ts)
+            except Exception:
+                pass
+            if heavy:
+                try:
+                    self._map_archive_step(fitness, wipe_risk, share)
+                except Exception as _me:
+                    self._log_raw('MAP-Elites archive failed: %s' % _me)
+            else:
+                try:
+                    self._map_fill_live(fitness, wipe_risk, ts)
+                except Exception as _me:
+                    self._log_raw('MAP-Elites live fill failed: %s' % _me)
+
+            self._log_raw(
+                'knob writer=%s gen=%d heavy=%s n=%d' % (
+                    writer or 'none', self.GENERATION, int(bool(heavy)), n))
 
             # State inference + bound evolution (structural learning)
             self._infer_state_strategies()
             self._evolve_bounds(wins, n, weak, strong)
-
-            # Stall-break mutation only if still silent after selection+noise
-            if not self.last_changes:
-                for t in ('ROCK', 'PAPER', 'SCISSORS'):
-                    self._nudge_type(t, 'pack_hunt_mult',
-                                    +1 if fitness.get(t, 0) < f_bar else -1,
-                                    f'{t} mutate pack (stall break)', strength=1.0)
-                    if self.last_changes:
-                        break
-                if not self.last_changes:
-                    self._nudge_type(weak, 'flank_bias', +1, f'{weak} mutate flank', strength=1.0)
         except Exception as e:
             self._log_raw(f'optimise nudges failed: {e}\n{traceback.format_exc()}')
 
@@ -2217,14 +2377,23 @@ class StrategyOptimizer:
         if persist:
             try:
                 gs = int(getattr(self, 'games_seen', 0) or 0)
-                self._persist_type_config(force=(gs > 0 and gs % 40 == 0))
+                self._persist_type_config(force=(gs > 0 and gs % 200 == 0))
             except Exception as e:
                 self._log_raw(f'persist failed: {e}\n{traceback.format_exc()}')
-        
         try:
-            self._optimise_last_man_endgame()
-        except Exception as _lm:
-            self._log_raw('last-man endgame failed: %s' % _lm)
+            self._log_raw('timing optimise=%.0fms persist_incl gen=%d' % (
+                (_time.perf_counter() - _t_opt) * 1000.0,
+                int(getattr(self, 'GENERATION', 0) or 0)))
+        except Exception:
+            pass
+        
+        if not getattr(self, 'SINGLE_KNOB_WRITER', True):
+            try:
+                self._optimise_last_man_endgame()
+            except Exception as _lm:
+                self._log_raw('last-man endgame failed: %s' % _lm)
+        else:
+            self._log_raw('single writer: skip last-man overlay nudges')
         # CLEAR_HUNT endgame: shorter finishes via split assignment
         try:
             metrics = getattr(getattr(self, 'w', None), 'metrics', None)
@@ -3083,9 +3252,12 @@ class StrategyOptimizer:
         if not os.path.exists(path):
             return counts
         try:
-            import csv
-            rows = list(csv.DictReader(open(path, encoding='utf-8')))
-            window = rows[-80:]
+            headers, lines = self._tail_csv_lines(path, 80, byte_window=200000)
+            window = []
+            for line in lines:
+                parts = line.split(',')
+                if headers and len(parts) >= 6:
+                    window.append(dict(zip(headers, parts)))
             n = max(1, len(window))
             for row in window:
                 for t, col in (('ROCK', 'wipe_risk_rock'),
@@ -3190,73 +3362,152 @@ class StrategyOptimizer:
             playbook.save_all_overlays()
             self._log_raw('last-man endgame nudges=%d types=%s' % (n, list(frames)))
 
-    def _optimise_playbook(self, fitness, f_bar, wins):
-        """Tune each strategy JSON independently: swap timing + declared tunables."""
+    _HUNT_KNOBS = (
+        'near_target_aggro', 'pack_hunt_mult', 'finish_bonus', 'focus_fire_mult',
+        'pincer_weight', 'clear_finish_mult', 'small_raid_bonus', 'focus_bonus',
+        'hunt_advantage', 'cluster_bonus',
+    )
+    _EVADE_KNOBS = (
+        'escape_bonus', 'fear_close_mult', 'fort_cover_weight',
+        'hide_among_prey_weight', 'sep_distance', 'outnumbered_fear_mult',
+    )
+    _CARE_KNOBS = (
+        'prey_repel_weight', 'prey_orbit_weight', 'no_corner_herd',
+        'prey_reserve_penalty', 'open_field_bias', 'fort_cover_weight',
+        'escape_bonus', 'fear_close_mult', 'sep_distance',
+    )
+    _CARE_SIDS = (
+        'LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_STALL', 'LAST_MEAL_ORBIT',
+    )
+
+    def _playbook_dir(self, path, fi, blunderous, stall, care=False):
+        """Signed step for one tunable. 0 = leave it."""
+        if path == 'when.priority' or str(path).endswith('.priority'):
+            return 0
+        if path.startswith('movement['):
+            return 0
+        if path.startswith('switch.'):
+            # hold_frames / margin are select policy (BO SKIP_SWITCH).
+            return 0
+        name = path.split('.')[-1] if '.' in path else path
+        if care or stall:
+            if name in self._HUNT_KNOBS:
+                return -1 if blunderous else 0
+            if name in self._CARE_KNOBS or name in self._EVADE_KNOBS:
+                return +1 if (fi < 0 or blunderous) else 0
+            return 0
+        if blunderous and name in self._HUNT_KNOBS:
+            return -1
+        if fi >= 0:
+            return 0
+        if name in self._HUNT_KNOBS:
+            return +1
+        return 0
+
+    def _optimise_playbook(self, fitness, f_bar, wins, skip=None):
+        """Tune played cards' role knobs from a bounded decision residual."""
+        import math
         import strategies.playbook as playbook
+        skip = set(skip or ())
         metrics = getattr(getattr(self, 'w', None), 'metrics', None)
         ticks_all = getattr(metrics, 'strategy_ticks', {}) if metrics is not None else {}
         n_chg = 0
+        care_sids = set(self._CARE_SIDS)
+        stall_states = {
+            'LAST_PREY_RISK', 'LAST_MAN', 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE',
+            'OUTNUMBERED',
+        }
         for tname in ('ROCK', 'PAPER', 'SCISSORS'):
             ticks = ticks_all.get(tname) or {}
-            used_any = sum(int(v or 0) for v in ticks.values())
-            # type-level prior (match fitness) + per-strategy decision score
-            type_fi = float(fitness.get(tname, 0) or 0) - float(f_bar or 0)
-            loser_budget = 1.85 if type_fi < 0 else 1.0
-            loser = type_fi < 0
             scores = {}
             for sid in playbook.list_ids():
                 try:
                     scores[sid] = float(playbook.strategy_decision_score(tname, sid))
                 except Exception:
                     scores[sid] = 0.0
-            used_scores = [scores[s] for s in scores if int(ticks.get(s, 0) or 0) > 0]
-            mean_s = (sum(used_scores) / len(used_scores)) if used_scores else 0.0
-            for sid in playbook.list_ids():
-                used = int(ticks.get(sid, 0) or 0)
-                if used < 12:
-                    # unused / flicker: slightly drop hold so select can explore it
-                    if used == 0:
-                        try:
-                            playbook.nudge_tunable(
-                                tname, sid, 'switch.hold_frames', -1, strength=0.3)
-                        except Exception:
-                            pass
+
+            def _eligible(sid):
+                if (tname, sid) in skip:
+                    return False
+                ov = (playbook.TEAM_OVERLAYS.get(tname) or {}).get(sid) or {}
+                return self._overlay_eligible(ticks.get(sid, 0), ov)
+
+            def _primary_stall(sid):
+                if sid in care_sids:
+                    return True
+                ov = (playbook.TEAM_OVERLAYS.get(tname) or {}).get(sid) or {}
+                try:
+                    states = list((ov.get('when') or {}).get('states') or [])
+                    primary = str(states[0]).upper() if states else ''
+                    return primary in stall_states
+                except Exception:
+                    return False
+
+            combat, stall_pool, care = [], [], []
+            for s in playbook.list_ids():
+                if not _eligible(s):
                     continue
-                tunables = playbook.tunables_for(tname, sid)
-                dec = scores.get(sid, 0.0) - mean_s
-                # keep one hog from dominating (old dec was ±130)
-                if dec > 2.0:
-                    dec = 2.0 + (dec - 2.0) * 0.05
-                elif dec < -2.0:
-                    dec = -2.0 + (dec + 2.0) * 0.05
-                fi = 0.65 * dec + 0.35 * type_fi
-                strength = max(0.2, min(1.1, abs(fi) * 0.45 + 0.2)) * loser_budget
-                n_this = 0
-                for path, bounds in tunables.items():
-                    if n_this >= 8:
-                        break
-                    if path == 'when.priority' or str(path).endswith('.priority'):
+                row = (int(ticks.get(s, 0) or 0), s)
+                if s in care_sids:
+                    care.append(row)
+                elif _primary_stall(s):
+                    stall_pool.append(row)
+                else:
+                    combat.append(row)
+            combat.sort(reverse=True)
+            stall_pool.sort(reverse=True)
+            care.sort(reverse=True)
+
+            def _nudge_pool(pool):
+                nonlocal n_chg
+                if not pool:
+                    return
+                used_scores = [scores[s] for _, s in pool]
+                mean_s = sum(used_scores) / max(1, len(used_scores))
+                for used, sid in pool:
+                    tunables = playbook.tunables_for(tname, sid)
+                    ov = (playbook.TEAM_OVERLAYS.get(tname) or {}).get(sid) or {}
+                    st = ov.get('stats') or {}
+                    games = max(1.0, float(st.get('games') or 1))
+                    blunderous = float(st.get('last_prey_blunder') or 0) / games > 0.08
+                    is_care = sid in care_sids
+                    stall = is_care
+                    try:
+                        states = list((ov.get('when') or {}).get('states') or [])
+                        primary = str(states[0]).upper() if states else ''
+                        stall = stall or primary in stall_states
+                    except Exception:
+                        pass
+                    dec = scores.get(sid, 0.0) - mean_s
+                    fi = math.tanh(dec)
+                    if abs(fi) < 0.04:
                         continue
-                    is_select = path.startswith('switch.')
-                    # Winners keep combat knobs. Losers get the budget.
-                    if type_fi > 0 and not is_select:
-                        continue
-                    if is_select:
-                        direction = +1 if fi > 0 else -1
-                    else:
-                        direction = +1  # explore more of declared tactics for losers
-                    ov = playbook.nudge_tunable(
-                        tname, sid, path, direction, strength=strength, bounds=bounds)
-                    if ov is not None:
+                    strength = 0.30 + 0.55 * abs(fi)
+                    n_this = 0
+                    for path, bounds in tunables.items():
+                        if n_this >= 4:
+                            break
+                        direction = self._playbook_dir(
+                            path, fi, blunderous, stall, care=is_care)
+                        if direction == 0:
+                            continue
+                        moved = playbook.nudge_tunable(
+                            tname, sid, path, direction, strength=strength, bounds=bounds)
+                        if moved is None:
+                            continue
                         n_chg += 1
                         n_this += 1
-                        cur = playbook._get_path(ov, path)
+                        cur = playbook._get_path(moved, path)
                         self.last_changes.append(
-                            '%s.%s.%s -> %s  (decision f%+.3f dec%+.3f type%+.3f)' % (
-                                tname, sid, path, cur, fi, dec, type_fi))
+                            '%s.%s.%s -> %s  (f%+.2f dec%+.2f d%+d)' % (
+                                tname, sid, path, cur, fi, dec, direction))
+
+            _nudge_pool(combat[:3])
+            _nudge_pool(stall_pool[:2])
+            _nudge_pool(care[:1])
         playbook.save_all_overlays()
-        self._log_raw('playbook strategy pass changes=%d strategies=%d' % (
-            n_chg, len(playbook.list_ids())))
+        self._log_raw('playbook strategy pass changes=%d strategies=%d skip=%d' % (
+            n_chg, len(playbook.list_ids()), len(skip)))
 
     def _bo_record(self):
         """Snapshot current knob vector + payoff for every overlay that played."""
@@ -3269,42 +3520,107 @@ class StrategyOptimizer:
             bag = playbook.TEAM_OVERLAYS.get(tname) or {}
             used = ticks_all.get(tname) or {}
             for sid, ov in bag.items():
-                if int(used.get(sid, 0) or 0) < 8:
+                if not self._overlay_eligible(used.get(sid, 0), ov):
                     continue
                 tun = playbook.tunables_for(tname, sid)
-                y = bo.payoff(ov)
+                if sid in self._CARE_SIDS:
+                    hunt = set(self._HUNT_KNOBS)
+                    tun = {k: v for k, v in (tun or {}).items()
+                           if (k.split('.')[-1] if '.' in k else k) not in hunt}
+                y = bo.payoff(ov, tname, sid)
                 c = 0.0
                 try:
-                    for ev in getattr(metrics, 'wipe_risk_events', []) or []:
-                        if str(ev.get('winner_type') or '') == tname:
-                            c = 1.0
-                            break
-                    if c < 1.0:
-                        for row in getattr(metrics, 'conversions', []) or []:
-                            if (str(row.get('winner_type') or '') == tname
-                                    and str(row.get('winner_strategy') or '') == sid
-                                    and int(row.get('last_prey_with_fear') or 0)):
+                    for row in getattr(metrics, 'conversions', []) or []:
+                        if str(row.get('blamed_strategy') or '') == sid:
+                            if str(row.get('winner_type') or '') == tname:
                                 c = 1.0
                                 break
+                        if (str(row.get('winner_type') or '') == tname
+                                and str(row.get('winner_strategy') or '') == sid
+                                and int(row.get('last_prey_with_fear') or 0)):
+                            c = 1.0
+                            break
                 except Exception:
                     c = 0.0
                 playbook.TEAM_OVERLAYS[tname][sid] = bo.record(ov, tun, y, constraint=c)
                 playbook._DIRTY_OVERLAYS.add((tname, sid))
                 n_rec += 1
         if n_rec:
-            self._log_raw('GP-EI recorded %d observations' % n_rec)
+            self._log_raw('GP-EI recorded %d observations migrated=%d' % (
+                n_rec, int(getattr(bo, 'LAST_MIGRATE', 0) or 0)))
+            bo.LAST_MIGRATE = 0
+
+    def _is_combat_card(self, sid, ov):
+        if sid in self._CARE_SIDS:
+            return False
+        states = list(((ov or {}).get('when') or {}).get('states') or [])
+        primary = str(states[0]).upper() if states else ''
+        if primary in ('CONTESTED', 'CLEAR_HUNT', 'SMALL_UNIT'):
+            return True
+        return sid in (
+            'PACK_HUNT', 'SCREEN_HUNT', 'OPEN_KITE', 'ESCORT_RING',
+            'CLEAR_SPLIT', 'CLEAR_FAN', 'LANE_SWEEP', 'CROSS_LANE',
+            'CHOKE_PINCH', 'DENSITY_RAID', 'ETA_STRIKE',
+        )
 
     def _bo_ei_step(self):
-        """One noisy-EI proposal per (type, strategy) with enough data."""
+        """EI on a few played cards only. Returns set of (type, sid) written."""
         import strategies.playbook as playbook
         from optimizer import bo
-        n = 0
+        metrics = getattr(getattr(self, 'w', None), 'metrics', None)
+        ticks_all = getattr(metrics, 'strategy_ticks', {}) if metrics is not None else {}
+        explore = set(getattr(playbook, 'EXPLORE_TYPES', None) or ())
+        done = set()
+        skips = []
+        max_per = int(getattr(self, 'BO_MAX_PER_TYPE', 2))
         for tname in ('ROCK', 'PAPER', 'SCISSORS'):
             bag = playbook.TEAM_OVERLAYS.get(tname) or {}
-            for sid, ov in list(bag.items()):
+            used = ticks_all.get(tname) or {}
+            played, rescue = [], []
+            for sid, ov in bag.items():
+                u = int(used.get(sid, 0) or 0)
+                st = (ov or {}).get('stats') or {}
+                life = int(st.get('ticks') or 0)
+                games = int(st.get('games') or 0)
+                y = bo.payoff(ov, tname, sid)
+                if self._overlay_eligible(u, ov):
+                    played.append((u, -float(y), sid, ov))
+                    continue
+                if tname in explore and self._is_combat_card(sid, ov) and (life >= 60 or games >= 4):
+                    rescue.append((float(y), sid, ov))
+            played.sort(reverse=True)
+            rescue.sort()  # worst lifetime payoff first
+            picked = []
+            seen = set()
+            if tname in explore and rescue:
+                sid, ov = rescue[0][1], rescue[0][2]
+                picked.append((sid, ov))
+                seen.add(sid)
+                self._log_raw('GP-EI rescue %s.%s y=%.3f' % (tname, sid, rescue[0][0]))
+            for _, _, sid, ov in played:
+                if sid in seen:
+                    continue
+                picked.append((sid, ov))
+                seen.add(sid)
+                if len(picked) >= max_per:
+                    break
+            if tname in explore and len(picked) < max_per:
+                for _, sid, ov in rescue:
+                    if sid in seen:
+                        continue
+                    picked.append((sid, ov))
+                    seen.add(sid)
+                    if len(picked) >= max_per:
+                        break
+            for sid, ov in picked[:max_per]:
                 tun = playbook.tunables_for(tname, sid)
+                if sid in self._CARE_SIDS:
+                    hunt = set(self._HUNT_KNOBS)
+                    tun = {k: v for k, v in (tun or {}).items()
+                           if (k.split('.')[-1] if '.' in k else k) not in hunt}
                 vec = bo.propose(ov, tun)
                 if not vec:
+                    skips.append('%s.%s:%s' % (tname, sid, getattr(bo, 'LAST_SKIP', None) or 'none'))
                     continue
                 before = dict(ov.get('weights') or {})
                 ov = bo.apply_vector(ov, vec, tun)
@@ -3314,20 +3630,26 @@ class StrategyOptimizer:
                 after = ov.get('weights') or {}
                 for k, v in list(vec.items())[:4]:
                     if k.startswith('switch.'):
-                        moved.append('%s=%.3f' % (k, float(v)))
-                    elif k in after and k in before and abs(float(after[k]) - float(before.get(k, 0))) > 1e-4:
+                        continue
+                    if k in after and k in before and abs(float(after[k]) - float(before.get(k, 0))) > 1e-4:
                         moved.append('%s: %.3f->%.3f' % (k, float(before[k]), float(after[k])))
-                if moved:
-                    n += 1
-                    self.last_changes.append('%s.%s GP-EI %s' % (tname, sid, ', '.join(moved[:3])))
-        if n:
+                if not moved:
+                    # still a proposal — count the card so playbook skips it
+                    moved.append('ei')
+                done.add((tname, sid))
+                self.last_changes.append('%s.%s GP-EI %s' % (tname, sid, ', '.join(moved[:3])))
+        if done:
             playbook.save_all_overlays()
-        return n
+        elif skips:
+            self._log_raw('GP-EI skip %s' % '; '.join(skips[:8]))
+        else:
+            self._log_raw('GP-EI skip no eligible cards')
+        return done
 
     def _persist_type_config(self, force=False):
         """Learned knobs go to strategies/types JSON — never type_config.py."""
-        if not self.last_changes and not force:
-            return
+        import time as _time
+        t0 = _time.perf_counter()
         try:
             import strategies.playbook as playbook
             try:
@@ -3338,9 +3660,12 @@ class StrategyOptimizer:
             written = playbook.persist_learned(
                 games_seen=getattr(self, 'games_seen', 0),
                 changes=list(self.last_changes or [])[:12])
-            # Never write GROK_BRIEF from persist — 400KB JSON+MD stalls the
-            # next match via GIL even if we started a background thread.
-            self._log_raw('persisted learned knobs -> %s' % written)
+            n = len(written or [])
+            sample = [os.path.basename(p) for p in (written or [])[:6]]
+            self._log_raw(
+                'timing persist=%.0fms files=%d force=%s sample=%s' % (
+                    (_time.perf_counter() - t0) * 1000.0,
+                    n, int(bool(force)), sample))
             try:
                 from optimizer.perf import get_perf
                 get_perf(getattr(self, 'w', None)).end('persist')

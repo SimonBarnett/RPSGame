@@ -1,0 +1,41 @@
+{
+  "id": "LOS_SPRING",
+  "title": "LOS spring",
+  "mode": "HUNT",
+  "desc": "Hold fort cover until FortLOS.clear to prey, then intercept. Uses cover.clear / occludes that no template called.",
+  "when": {
+    "states": ["CONTESTED", "OUTNUMBERED", "SMALL_UNIT"],
+    "priority": 64
+  },
+  "tactics": ["los_spring", "fort_cover", "fort_ambush", "lead_intercept", "fear_flee"],
+  "math": ["cover", "intercept", "steer"],
+  "movement": [
+    {"fn": "cover.clear", "blend": 0.7},
+    {"fn": "cover.cover_heading", "blend": 0.35},
+    {"fn": "intercept.lead", "blend": 0.4, "when": "chase"}
+  ],
+  "switch": {"hold_frames": 8, "margin": 1.05},
+  "tunables": {
+    "switch.hold_frames": [2, 16, 1],
+    "switch.margin": [0.5, 2.0, 0.05],
+    "when.priority": [1, 120, 4],
+    "fort_ambush_bonus": [0.3, 1.8, 0.05],
+    "fort_cover_weight": [0.4, 1.8, 0.05],
+    "predict_lookahead": [6.0, 22.0, 0.5],
+    "movement[0].blend": [0.3, 1.0, 0.05]
+  },
+  "bounds": {
+    "fort_ambush_bonus": [0.3, 1.8, 0.05],
+    "fort_cover_weight": [0.4, 1.8, 0.05]
+  },
+  "base": {
+    "speed_base": 1.26,
+    "turn_base": 14.2,
+    "size": 20
+  },
+  "weights": {
+    "fort_ambush_bonus": 1.1,
+    "fort_cover_weight": 1.2,
+    "predict_lookahead": 14.0
+  }
+}

@@ -174,7 +174,7 @@ class Config:
     # Match intro / outro timing (ms)
     FAST_SIM = False             # batch / dry-run: skip intros, presentation, clock
     FAST_SIM_PHYS_STEPS = 3      # physics substeps per batch frame
-    FAST_SIM_AI_EVERY = 2        # command at most every N batch frames
+    FAST_SIM_AI_EVERY = 1        # js_tick thinks every frame (match JS play)
     TITLE_MS = 5600              # welcome + visible learn pass
     LEARN_REVEAL_MS = 70         # ms between typed knob lines on TITLE
     LEARN_MAX_MS = 9000          # never hold TITLE longer than this for learning
@@ -274,8 +274,8 @@ class Role(Enum):
 # Frozen per-type identity. Tunables live in strategies/ JSON, not here.
 TYPE_IDENTITY = {
     "ROCK": {
-        "speed_base": 1.0946,
-        "turn_base": 13.7875,
+        "speed_base": 1.0800,
+        "turn_base": 13.7299,
         "size": 20,
         "strength_range": (-0.2, 0.3),
         "agility_range": (-2.0, 4.0),
@@ -363,27 +363,16 @@ STRATEGY_KEYS = list(STRATEGY_BOUNDS.keys())
 
 
 def _load_strategy_knobs(type_name):
-    """Pull learned weights/base from types/{TYPE}/*.json (no _profile)."""
+    """Type prior from types/{TYPE}/_base.json only. Card overlays apply at play."""
     here = os.path.dirname(os.path.abspath(__file__))
-    tdir = os.path.join(here, 'strategies', 'types', type_name)
+    path = os.path.join(here, 'strategies', 'types', type_name, '_base.json')
     knobs = {}
     try:
-        names = sorted(fn for fn in os.listdir(tdir)
-                       if fn.endswith('.json') and not fn.startswith('_'))
+        data = json.load(open(path, encoding='utf-8'))
     except Exception:
-        names = []
-    # Last-writer-wins by filename; PACK_HUNT applied last if present.
-    if 'PACK_HUNT.json' in names:
-        names = [n for n in names if n != 'PACK_HUNT.json'] + ['PACK_HUNT.json']
-    for fn in names:
-        try:
-            with open(os.path.join(tdir, fn), encoding='utf-8') as f:
-                data = json.load(f)
-        except Exception:
-            continue
-        for src in (data.get('base') or {}, data.get('weights') or {}):
-            for k, v in src.items():
-                knobs[k] = v
+        data = {}
+    if isinstance(data, dict):
+        knobs.update(data)
     return knobs
 
 
@@ -463,17 +452,21 @@ def effective_strategy(type_name, team_size, self_count=None, fear_count=None, p
     out["_team_size"] = ts
     out["_is_small_unit"] = False
     out["_near_wipe"] = False
-    out["_game_state"] = "CONTESTED"
     wipe_th = int(d.get("near_wipe_threshold", 2))
     out["near_wipe_threshold"] = wipe_th
+    try:
+        from strategies.playbook import match_state as _match_state
+        out["_game_state"] = _match_state(self_count, fear_count, prey_count)
+    except Exception:
+        out["_game_state"] = "CONTESTED"
     if self_count is not None and self_count <= out["small_unit_threshold"]:
         out["_is_small_unit"] = True
         out["near_target_aggro"] *= d.get("small_aggro_mult", 1.0)
         out["escape_bonus"] = float(d["escape_bonus"]) * d.get("small_escape_mult", 1.0)
-        out["_game_state"] = "SMALL_UNIT"
+    gs = out["_game_state"]
+    out["_near_wipe"] = gs in ("NEAR_WIPE", "LAST_MAN")
     if fear_count is not None and prey_count is not None:
-        if fear_count <= 0 and prey_count > 0:
-            out["_game_state"] = "CLEAR_HUNT"
+        if gs == "CLEAR_HUNT":
             m = max(1.4, float(d.get("state_clear_hunt", 2.0)))
             cf = max(2.2, float(d.get("clear_finish_mult", 2.2)))
             out["prey_reserve"] = 0
@@ -492,15 +485,12 @@ def effective_strategy(type_name, team_size, self_count=None, fear_count=None, p
             out["clear_voronoi_cap_slack"] = 0
             out["fort_cover_weight"] = min(out["fort_cover_weight"], 0.3)
             out["hide_among_prey_weight"] = 0.0
-        elif fear_count > 0 and prey_count <= 0:
-            out["_game_state"] = "NO_PREY_FEAR_ALIVE"
+        elif gs == "NO_PREY_FEAR_ALIVE":
             m = float(d.get("state_no_prey_fear", 0.2))
             out["finish_bonus"] = float(d["finish_bonus"]) * m
             out["near_target_aggro"] *= m
             out["hide_among_prey_weight"] = 0.0
-        elif fear_count > 0 and prey_count <= max(3, out["prey_reserve"]):
-            out["_game_state"] = "LAST_PREY_RISK"
-            # caution: 3 left → 1/3, 2 left → 2/3, 1 left → 1
+        elif gs == "LAST_PREY_RISK":
             left = max(1, min(3, int(prey_count)))
             caution = (4.0 - left) / 3.0
             out["_last_meal_caution"] = caution
@@ -515,21 +505,16 @@ def effective_strategy(type_name, team_size, self_count=None, fear_count=None, p
             out["open_field_bias"] = max(float(d.get("open_field_bias", 0.7)), 0.7) * (1.0 + 0.4 * caution)
             out["escape_bonus"] = float(out.get("escape_bonus", 1.0)) * (1.0 + 0.45 * caution)
             out["fort_cover_weight"] = min(1.8, float(out.get("fort_cover_weight", 1.0)) * (1.0 + 0.35 * caution))
-        elif self_count is not None and fear_count > self_count:
-            out["_game_state"] = "OUTNUMBERED"
+        elif gs == "OUTNUMBERED":
             m = float(d.get("state_outnumbered", 1.25))
             out["escape_bonus"] = float(d["escape_bonus"]) * m
             out["fear_close_mult"] *= m
             out["hide_among_prey_weight"] = min(2.2, float(out.get("hide_among_prey_weight", 1.0)) * 1.25)
-        else:
-            out["_game_state"] = "CONTESTED"
+        elif gs == "CONTESTED":
             out["near_target_aggro"] *= float(d.get("state_contested", 1.0))
-    if (self_count is not None and self_count == 1
-            and (fear_count is None or fear_count > 0)
-            and out.get("_game_state") != "CLEAR_HUNT"):
+    if gs == "LAST_MAN":
         out["_near_wipe"] = True
         out["_last_man"] = True
-        out["_game_state"] = "LAST_MAN"
         nw = float(d.get("state_near_wipe", 1.35))
         out["cohesion_weight"] = 0.0
         out["escape_bonus"] = float(d["escape_bonus"]) * float(d.get("near_wipe_evade_mult", 1.6)) * nw * 1.15
@@ -540,11 +525,8 @@ def effective_strategy(type_name, team_size, self_count=None, fear_count=None, p
         out["pack_hunt_mult"] = max(0.1, float(out.get("pack_hunt_mult", 1.0)) * 0.1)
         out["near_target_aggro"] = float(out["near_target_aggro"]) * 0.25
         return out
-    if (self_count is not None and self_count <= wipe_th
-            and (fear_count is None or fear_count > 0)
-            and out.get("_game_state") != "CLEAR_HUNT"):
+    if gs == "NEAR_WIPE":
         out["_near_wipe"] = True
-        out["_game_state"] = "NEAR_WIPE"
         nw = float(d.get("state_near_wipe", 1.35))
         out["cohesion_weight"] = float(d.get("near_wipe_cohesion", 0.0))
         out["escape_bonus"] = float(d["escape_bonus"]) * float(d.get("near_wipe_evade_mult", 1.6)) * nw

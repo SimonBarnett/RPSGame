@@ -1,14 +1,14 @@
 {
   "ROCK": {
-    "speed_base": 1.2033,
-    "turn_base": 14.44
+    "speed_base": 1.3896,
+    "turn_base": 15.9375
   },
   "PAPER": {
-    "speed_base": 1.88,
-    "turn_base": 13.0
+    "speed_base": 1.7508,
+    "turn_base": 12.225
   },
   "SCISSORS": {
-    "speed_base": 1.3079,
-    "turn_base": 13.35
+    "speed_base": 1.4737,
+    "turn_base": 12.575
   }
 }

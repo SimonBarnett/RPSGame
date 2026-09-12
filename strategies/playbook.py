@@ -13,6 +13,22 @@ import copy
 import math
 import random
 EXPLORE_TYPES = set()
+_MAP_CELLS = None
+_MAP_MTIME = 0.0
+_GROK_LAST_GAMES = -1
+_GROK_BRIEF_EVERY = 20
+PERSIST_BO_OBS = 20
+CURRENT_TEAM = 12
+
+
+def set_match_context(team_size=None):
+    global CURRENT_TEAM
+    if team_size is None:
+        return
+    try:
+        CURRENT_TEAM = max(1, int(team_size))
+    except Exception:
+        pass
 
 from config import TYPE_DEFAULTS, STRATEGY_KEYS
 
@@ -30,6 +46,7 @@ except Exception:
 TEMPLATES = os.path.join(ROOT, 'templates')
 TYPES_DIR = os.path.join(ROOT, 'types')
 TYPES = ('ROCK', 'PAPER', 'SCISSORS')
+JS_STRATEGIES = os.path.join(os.path.dirname(ROOT), 'rps_pub', 'strategies')
 
 # Populated by reload()
 MATH_MODULES = {}
@@ -40,6 +57,7 @@ STRATEGY_IDS = ()
 DEFAULT_ORDER = ()
 _SPEC_CACHE = {}
 _DIRTY_OVERLAYS = set()
+_LAST_WRITTEN = []
 _BOOK_CACHE = {}
 
 
@@ -49,6 +67,74 @@ def _read_json(path, default=None):
             return json.load(f)
     except Exception:
         return default
+
+
+def _shrink_ab(slot, cap=24.0):
+    """Keep a small Thompson posterior; do not persist conversion counts."""
+    if not isinstance(slot, dict):
+        return slot
+    try:
+        a = float(slot.get('alpha') or 1.0)
+        b = float(slot.get('beta') or 1.0)
+    except Exception:
+        return slot
+    s = a + b
+    if s > cap:
+        k = cap / s
+        slot['alpha'] = a * k
+        slot['beta'] = b * k
+    return slot
+
+
+def _disk_overlay(ov, for_js=False):
+    """Strip learner-only bags before a NAS write. JS is play-only."""
+    if not isinstance(ov, dict):
+        return ov
+    out = dict(ov)
+    out.pop('last_changes', None)
+    if for_js:
+        st = dict(out.get('stats') or {})
+        bys = {}
+        for k, v in (st.get('by_state') or {}).items():
+            if isinstance(v, dict):
+                bys[k] = {
+                    'alpha': float(v.get('alpha') or 1.0),
+                    'beta': float(v.get('beta') or 1.0),
+                }
+        out['stats'] = {
+            'alpha': float(st.get('alpha') or 1.0),
+            'beta': float(st.get('beta') or 1.0),
+            'ema': float(st.get('ema') or 0.0),
+            'by_state': bys,
+        }
+        out.pop('q', None)
+        out.pop('games_seen', None)
+        return out
+    st = dict(out.get('stats') or {})
+    st.pop('q', None)
+    st.pop('pulls', None)
+    st.pop('pulls_by_state', None)
+    st.pop('mc_G', None)
+    bo = dict(st.get('bo') or {})
+    if bo:
+        n = PERSIST_BO_OBS
+        st['bo'] = {
+            'keys': list(bo.get('keys') or []),
+            'X': list(bo.get('X') or [])[-n:],
+            'y': list(bo.get('y') or [])[-n:],
+            'c': list(bo.get('c') or [])[-n:],
+        }
+    vs = dict(st.get('by_vs') or {})
+    for lt, slot in list(vs.items()):
+        vs[lt] = _shrink_ab(dict(slot or {}))
+    st['by_vs'] = vs
+    bys = dict(st.get('by_state') or {})
+    for stname, slot in list(bys.items()):
+        bys[stname] = _shrink_ab(dict(slot or {}))
+    st['by_state'] = bys
+    out['stats'] = st
+    out.pop('q', None)
+    return out
 
 
 def _write_json(path, data):
@@ -300,6 +386,7 @@ def invalidate_spec_cache():
     _SPEC_CACHE = {}
     _BOOK_CACHE = {}
 _DIRTY_OVERLAYS = set()
+_LAST_WRITTEN = []
 _BOOK_CACHE = {}
 
 
@@ -342,6 +429,12 @@ FALLBACK = {
 }
 
 def _banned(type_name):
+    try:
+        b = _meta_banned(type_name)
+        if b:
+            return b
+    except Exception:
+        pass
     return BANNED.get(str(type_name or "").upper(), frozenset())
 
 def _fallback(type_name, legal=None):
@@ -352,59 +445,116 @@ def _fallback(type_name, legal=None):
         return sid
     return "PACK_HUNT"
 
+CARD_FOR_STATE = {
+    'CLEAR_HUNT': ['CLEAR_SPLIT', 'CLEAR_FAN', 'FINISH_CLOCK', 'PACK_HUNT'],
+    'LAST_PREY_RISK': ['LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_ORBIT'],
+    'LAST_MAN': ['LAST_MAN_RUN', 'SURVIVE_FEAR', 'ORBIT_KITE'],
+    'NEAR_WIPE': ['LAST_MAN_RUN', 'SURVIVE_FEAR', 'SCATTER_RAID'],
+    'NO_PREY_FEAR_ALIVE': ['SURVIVE_FEAR', 'ORBIT_KITE', 'SHADOW_PREY', 'HOLD_COVER'],
+    'OUTNUMBERED': ['GIVE_GROUND', 'HOLD_COVER', 'SHADOW_PREY'],
+    'SMALL_UNIT': ['SCATTER_RAID', 'OPEN_KITE', 'SCREEN_HUNT'],
+    'CONTESTED': ['PACK_HUNT', 'SCREEN_HUNT', 'OPEN_KITE', 'ESCORT_RING'],
+}
+ENDGAME_STATES = frozenset({
+    'CLEAR_HUNT', 'LAST_MAN', 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE', 'LAST_PREY_RISK',
+})
+
+
+def match_state(self_n, fear_n, prey_n):
+    """Same order as rps.js gameState. Play-only; learning does not change this."""
+    self_n = int(self_n or 0)
+    fear_n = int(fear_n or 0)
+    prey_n = int(prey_n or 0)
+    if self_n <= 0:
+        return 'DEAD'
+    if fear_n <= 0 and prey_n > 0:
+        return 'CLEAR_HUNT'
+    if fear_n > 0 and prey_n <= 0:
+        return 'NO_PREY_FEAR_ALIVE'
+    if self_n == 1 and fear_n > 0:
+        return 'LAST_MAN'
+    if self_n <= 2 and fear_n > 0:
+        return 'NEAR_WIPE'
+    try:
+        from strategies.meta_load import last_prey_max
+        lp = int(last_prey_max() or 2)
+    except Exception:
+        lp = 2
+    if fear_n > 0 and prey_n <= lp:
+        return 'LAST_PREY_RISK'
+    if fear_n > self_n:
+        return 'OUTNUMBERED'
+    if self_n <= 3 and fear_n > 0:
+        return 'SMALL_UNIT'
+    return 'CONTESTED'
+
+
 def _legal_ids(type_name, state):
-    """Strategy ids whose when.states contain this game state."""
+    """Same legal set as rps.js legalFromJson: when.states, meta banned, meta force."""
     if not STRATEGY_IDS:
         reload()
+    ban = _banned(type_name)
+    bag = TEAM_OVERLAYS.get(type_name) or {}
     legal = []
     for sid in STRATEGY_IDS or list_ids():
         spec = spec_for(type_name or 'ROCK', sid) if type_name else (STRATEGIES.get(sid) or {})
         if spec.get('enabled', True) is False:
             continue
-        try:
-            from strategies import balance as _bal
-            if sid in (_bal.BANNED.get(str(type_name or '').upper()) or ()):
-                continue
-        except Exception:
-            pass
+        if sid in ban:
+            continue
         states = (spec.get('when') or {}).get('states') or []
         if state in states:
             legal.append(sid)
-    ban = _banned(type_name)
-    if ban:
-        legal = [s for s in legal if s not in ban]
-    if state == 'LAST_PREY_RISK':
-        care = [s for s in legal if s in (
-            'LAST_PREY_CARE', 'LAST_MEAL_ORBIT', 'LAST_MEAL_STALL',
-            'GIVE_GROUND', 'PRESSURE_BREAK', 'ORBIT_KITE')]
-        care = [s for s in care if s not in ('DELAY_FEAST', 'ETA_STRIKE')]
-        if care:
-            legal = care
-    if state == 'CONTESTED':
-        legal = [s for s in legal if s not in (
-            'HOLD_COVER', 'REGROUP_RIDGE')]
-        if type_name == 'PAPER':
-            prefer = list(_meta_force('PAPER', 'CONTESTED') or ())
-            kite = [s for s in legal if s in prefer] if prefer else legal
-            legal = kite or prefer or legal
-        if type_name == 'SCISSORS':
-            # OPEN_KITE farmed Paper while evading Rock (16g window 0/25/75).
-            # Keep OPEN_KITE for OUTNUMBERED/SMALL_UNIT; CONTESTED uses cover/juke.
-            mix = [s for s in legal if s in (
-                'FORT_KITE', 'BOUNCE_JUKE', 'ORBIT_KITE', 'SURVIVE_FEAR')]
-            if mix:
-                legal = mix
-    if state == 'OUTNUMBERED' and type_name == 'PAPER':
-        # Do not dive Rock while outnumbered — Scissors converts the pile.
-        screen = [s for s in legal if s in ('SCREEN_HUNT', 'OPEN_KITE', 'ORBIT_KITE')]
-        legal = screen or [s for s in legal if s not in ('HOLD_COVER', 'PACK_HUNT', 'LANE_SWEEP')] or legal
-    if state == 'CLEAR_HUNT':
-        finish = [s for s in legal if s in ENDGAME_FINISH]
-        legal = [s for s in (finish or legal) if s not in (
-            'LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_STALL',
-            'GIVE_GROUND', 'PRESSURE_BREAK', 'SURVIVE_FEAR',
-            'LAST_MAN_RUN', 'LAST_MAN_CLOCK', 'ORBIT_KITE')]
+    try:
+        forced_ids = list(_meta_force(type_name, state) or ())
+    except Exception:
+        forced_ids = []
+    if forced_ids:
+        forced = [s for s in forced_ids if s in bag and s not in ban]
+        if forced:
+            legal = forced
+    if not legal:
+        pool = CARD_FOR_STATE.get(str(state or ''), CARD_FOR_STATE['CONTESTED'])
+        legal = [s for s in pool if (s in bag or s in (STRATEGIES or {})) and s not in ban]
+    if str(state) == 'LAST_PREY_RISK':
+        care = CARD_FOR_STATE.get('LAST_PREY_RISK') or []
+        legal = [s for s in legal if s in care]
+        if not legal:
+            legal = [s for s in care if (s in bag or s in (STRATEGIES or {})) and s not in ban]
     return legal
+
+
+def _card_mean(type_name, strategy_id, state=None):
+    """Greedy posterior mean. Same formula as rps.js cardMean (no Thompson)."""
+    st = ((TEAM_OVERLAYS.get(type_name) or {}).get(strategy_id) or {}).get('stats') or {}
+    slot = {}
+    if state:
+        slot = ((st.get('by_state') or {}).get(state) or {})
+    try:
+        a = float(slot.get('alpha', st.get('alpha', 1.0)) or 1.0)
+        b = float(slot.get('beta', st.get('beta', 1.0)) or 1.0)
+    except Exception:
+        return 0.33
+    if a + b <= 0:
+        return 0.33
+    return a / (a + b)
+
+
+def pick_card(type_name, state):
+    """Play-only greedy pick. Learning updates JSON after the match, not here."""
+    legal = _legal_ids(type_name, state)
+    if not legal:
+        pool = CARD_FOR_STATE.get(str(state or ''), CARD_FOR_STATE['CONTESTED'])
+        return pool[0]
+    best, best_s = legal[0], -1e18
+    for sid in legal:
+        spec = spec_for(type_name, sid)
+        pri = float((spec.get('when') or {}).get('priority', 50) or 50)
+        mu = _card_mean(type_name, sid, state)
+        s = mu * 10.0 + pri * 0.01
+        if s > best_s:
+            best_s, best = s, sid
+    return best
 
 
 def _arm_posterior(type_name, strategy_id, state=None, opponent=None):
@@ -449,6 +599,12 @@ def _select_score(type_name, strategy_id, state=None, opponent=None):
         q = rl.bonus(type_name, state, strategy_id)
     except Exception:
         q = 0.0
+    try:
+        champ = _map_champion(type_name, state)
+        if champ and strategy_id == champ:
+            q += 0.08
+    except Exception:
+        pass
     return 0.50 * th + 0.22 * ema + 0.002 * pri + ucb + q
 
 
@@ -464,10 +620,52 @@ def _note_pull(type_name, sid, state=None):
         st['pulls_by_state'] = by
     ov['stats'] = st
     TEAM_OVERLAYS[type_name][sid] = ov
+
+
+def set_map_cells(cells):
+    """In-process MAP archive. Avoid getmtime on the NAS inside select()."""
+    global _MAP_CELLS, _MAP_MTIME
+    _MAP_CELLS = list(cells or [])
+    _MAP_MTIME = -1.0
+
+
+def _map_champion(type_name, state, team_size=None):
+    """Sid occupying this (state, team_bucket, type) niche, else any bucket."""
+    global _MAP_CELLS, _MAP_MTIME
+    if _MAP_CELLS is None:
+        try:
+            from optimizer.paths import grok_path
+            path = grok_path('map_elites.json')
+            raw = _read_json(path, {}) or {}
+            _MAP_CELLS = list(raw.get('cells') or [])
+            _MAP_MTIME = -1.0
+        except Exception:
+            _MAP_CELLS = []
+    st = str(state or '')
+    tn = str(type_name or '')
     try:
-        _DIRTY_OVERLAYS.add((type_name, sid))
+        ts = int(team_size if team_size is not None else CURRENT_TEAM or 12)
     except Exception:
-        pass
+        ts = 12
+    bucket = 24
+    for e in (8, 12, 16, 24):
+        if ts <= e:
+            bucket = e
+            break
+    exact, any_b = None, None
+    for cell in _MAP_CELLS:
+        if str(cell.get('type') or '') != tn:
+            continue
+        if str(cell.get('state') or '') != st:
+            continue
+        vis = int(cell.get('visits') or 0)
+        if int(cell.get('team_bucket') or 0) == bucket:
+            if exact is None or vis > int(exact.get('visits') or 0):
+                exact = cell
+        if any_b is None or vis > int(any_b.get('visits') or 0):
+            any_b = cell
+    hit = exact or any_b
+    return (hit or {}).get('sid')
 
 
 def sample_arm(type_name, legal, state=None, opponent=None, explore=0.12):
@@ -494,45 +692,13 @@ def sample_arm(type_name, legal, state=None, opponent=None, explore=0.12):
         pick = random.choice(unpulled)
         _note_pull(type_name, pick, state)
         return pick
-    if str(state or "") == "CONTESTED" and t >= 20:
-        try:
-            from optimizer import mcts as _mcts
-            pick = _mcts.pick(type_name, legal, state, opponent=opponent)
-            if pick in legal:
-                _note_pull(type_name, pick, state)
-                return pick
-        except Exception:
-            pass
     if random.random() < max(0.0, min(0.15, float(explore))):
         pick = random.choice(legal)
         _note_pull(type_name, pick, state)
         return pick
-    if state == 'CONTESTED' and set(legal) <= {'PACK_HUNT', 'LANE_SWEEP'}:
-        pulls = {}
-        for sid in legal:
-            st = ((TEAM_OVERLAYS.get(type_name) or {}).get(sid) or {}).get('stats') or {}
-            pulls[sid] = int((st.get('pulls_by_state') or {}).get('CONTESTED') or 0)
-        tot = sum(pulls.values())
-        if tot >= 8:
-            lead = max(legal, key=lambda s: pulls.get(s, 0))
-            if pulls.get(lead, 0) / tot > 0.65 and random.random() < 0.40:
-                other = [s for s in legal if s != lead]
-                if other:
-                    pick = other[0]
-                    _note_pull(type_name, pick, state)
-                    return pick
-    c = 0.70
-    best_sid, best_s = posts[0][0], -1e9
-    for sid, a, b, n, st in posts:
-        mu = a / (a + b)
-        bonus = c * math.sqrt(math.log(t + 1.0) / max(1.0, n))
-        q = 0.0
-        try:
-            from optimizer import rl
-            q = 0.15 * float(rl.bonus(type_name, state, sid) or 0)
-        except Exception:
-            q = 0.0
-        score = mu + bonus + q
+    best_sid, best_s = legal[0], -1e9
+    for sid in legal:
+        score = _select_score(type_name, sid, state, opponent=opponent)
         if score > best_s:
             best_s, best_sid = score, sid
     _note_pull(type_name, best_sid, state)
@@ -540,12 +706,7 @@ def sample_arm(type_name, legal, state=None, opponent=None, explore=0.12):
 
 
 def strategy_for_state(state, type_name=None, opponent=None):
-    legal = _legal_ids(type_name, state)
-    if not legal:
-        pool = (_book(type_name)['order'] if type_name else DEFAULT_ORDER) or list_ids()
-        return pool[0] if pool else 'PACK_HUNT'
-    extra = 0.28 if type_name in EXPLORE_TYPES else 0.12
-    return sample_arm(type_name, legal, state, opponent=opponent, explore=extra) or legal[0]
+    return pick_card(type_name, state)
 
 
 ENDGAME_FINISH = (
@@ -564,78 +725,31 @@ ENDGAME_PREY = (
 
 def endgame_switch(type_name, game_state, current=None, fear=0, prey=0,
                    self_count=None, opponent=None):
-    """
-    Hard cutover at endgame boundaries. Hold does not apply.
-    Predator with no fear left → finish doctrine (minimise remaining time).
-    Last meals while fear lives → CARE (do not finish).
-    Last man / no prey + fear → evade (maximise remaining time).
-    Returns (sid, hold, switched) or None if this is not an endgame state.
-    """
-    state = str(game_state or '')
-    cur = current
-    if state == 'CLEAR_HUNT' and int(fear or 0) <= 0 and int(prey or 0) > 0:
-        legal = [s for s in _legal_ids(type_name, 'CLEAR_HUNT') if s in ENDGAME_FINISH]
-        if not legal:
-            legal = list(ENDGAME_FINISH)
-        sid = sample_arm(type_name, legal, 'CLEAR_HUNT', opponent=opponent) or 'CLEAR_SPLIT'
-        if sid not in (TEAM_OVERLAYS.get(type_name) or {}):
-            sid = 'CLEAR_SPLIT'
-        return sid, 0, sid != cur
-    if state == 'LAST_PREY_RISK' and int(fear or 0) > 0:
-        legal = [s for s in _legal_ids(type_name, 'LAST_PREY_RISK') if s in ENDGAME_CARE]
-        sid = sample_arm(type_name, legal or ['LAST_PREY_CARE'], 'LAST_PREY_RISK', opponent=opponent)
-        return sid or 'LAST_PREY_CARE', 0, sid != cur
-    # Paper CONTESTED is kite-first via _legal_ids / select(). Do not force PACK/LANE here.
-    if state == 'LAST_MAN' and int(fear or 0) > 0:
-        legal = [s for s in _legal_ids(type_name, 'LAST_MAN') if s in ENDGAME_PREY]
-        sid = sample_arm(type_name, legal or ['LAST_MAN_RUN'], 'LAST_MAN', opponent=opponent)
-        return sid or 'LAST_MAN_RUN', 0, sid != cur
-    if state == 'NO_PREY_FEAR_ALIVE' and int(fear or 0) > 0:
-        legal = [s for s in _legal_ids(type_name, 'NO_PREY_FEAR_ALIVE') if s in ENDGAME_PREY]
-        sid = sample_arm(type_name, legal or ['SURVIVE_FEAR'], 'NO_PREY_FEAR_ALIVE', opponent=opponent)
-        return sid or 'SURVIVE_FEAR', 0, sid != cur
+    """JS has no separate endgame picker — hold skip lives in select()."""
     return None
 
 
 def select(type_name, game_state, current=None, hold_frames=0, opponent=None):
-    """
-    Pick a strategy id for this team from its own JSON copies.
-    Returns (strategy_id, new_hold_frames, switched).
-    """
+    """Same as rps.js pickCardHold. Returns (strategy_id, new_hold_frames, switched)."""
     if not STRATEGY_IDS:
         reload()
-    cut = endgame_switch(type_name, game_state, current=current,
-                         fear=1 if game_state in ('LAST_PREY_RISK', 'LAST_MAN',
-                                                 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE') else 0,
-                         prey=1 if game_state in ('CLEAR_HUNT', 'LAST_PREY_RISK',
-                                                 'CONTESTED') else 0,
-                         opponent=opponent)
-    if cut is not None:
-        return cut
-    book = _book(type_name)
-    ban = _banned(type_name)
-    legal = _legal_ids(type_name, game_state)
-    desired = strategy_for_state(game_state, type_name, opponent=opponent)
-    if desired in ban or (legal and desired not in legal):
-        desired = _fallback(type_name, legal)
-    if current in ban or (current is not None and legal and current not in legal):
+    state = str(game_state or 'CONTESTED')
+    desired = pick_card(type_name, state)
+    legal = _legal_ids(type_name, state)
+    if current in _banned(type_name):
         return desired, 0, True
-    if current is None or current == desired:
+    if state in ENDGAME_STATES and current != desired:
+        return desired, 0, True
+    if not current or current == desired:
         return desired, 0, False
-    if current not in legal:
+    if legal and current not in legal:
         return desired, 0, True
-    cur = spec_for(type_name, current)
-    cur_states = (cur.get('when') or {}).get('states') or []
-    if game_state in cur_states:
-        slack = float((cur.get('switch') or {}).get('margin', book['switch_margin']) or 1.0)
-        slack = max(0.0, min(2.0, slack)) * 0.08   # additive score slack
-        if (_select_score(type_name, desired, game_state, opponent=opponent)
-                < _select_score(type_name, current, game_state, opponent=opponent) + slack):
-            return current, 0, False
-    # Commit to the outgoing strategy (hold once you are in).
-    hold_need = max(1, int((cur.get('switch') or {}).get('hold_frames', book['switch_hold'])))
+    spec = spec_for(type_name, desired)
+    sw = spec.get('switch') or {}
+    hold_need = max(1, int(sw.get('hold_frames', 8) or 8))
+    margin = float(sw.get('margin', 1.0) or 1.0)
     hold_frames = int(hold_frames) + 1
-    if hold_frames >= hold_need:
+    if hold_frames >= hold_need * margin:
         return desired, 0, True
     return current, hold_frames, False
 
@@ -798,15 +912,33 @@ def nudge_tunable(type_name, strategy_id, path, direction, strength=1.0, bounds=
         cur_f = float(cur)
     except Exception:
         return None
-    mag = max(0.25, min(3.0, abs(float(strength))))
+    mag = max(0.25, min(1.4, abs(float(strength))))
+    span = max(1e-9, float(hi) - float(lo))
+    at_lo = (cur_f - float(lo)) / span <= 0.02
+    at_hi = (float(hi) - cur_f) / span <= 0.02
+    if at_lo and direction < 0:
+        direction = 1
+        mag = min(mag, 0.45)
+    elif at_hi and direction > 0:
+        direction = -1
+        mag = min(mag, 0.45)
     nxt = cur_f + direction * step * mag
     if path.endswith('hold_frames') or path.endswith('priority') or path.endswith('ttl'):
         nxt = int(round(nxt))
     nxt = max(lo, min(hi, nxt))
+    if path.endswith('hold_frames'):
+        nxt = max(2, min(24, int(nxt)))
+        if strategy_id in (
+                'LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_STALL', 'LAST_MEAL_ORBIT'):
+            nxt = max(10, nxt)
     if abs(nxt - cur_f) < abs(step) * 0.05:
-        return ov
+        return None
     _set_path(ov, path, nxt)
     TEAM_OVERLAYS[type_name][strategy_id] = ov
+    try:
+        _DIRTY_OVERLAYS.add((type_name, strategy_id))
+    except Exception:
+        pass
     return ov
 
 
@@ -823,7 +955,7 @@ def save_overlay(type_name, strategy_id, overlay=None):
 
 
 def save_all_overlays(force=False):
-    global _DIRTY_OVERLAYS
+    global _DIRTY_OVERLAYS, _LAST_WRITTEN
     if force:
         for tname, bag in TEAM_OVERLAYS.items():
             for sid, ov in bag.items():
@@ -836,8 +968,10 @@ def save_all_overlays(force=False):
         if ov is None:
             continue
         path = os.path.join(TYPES_DIR, tname, sid + '.json')
-        _write_json(path, ov)
+        _write_json(path, _disk_overlay(ov, for_js=False))
         written.append(path)
+    if written:
+        _LAST_WRITTEN.extend(written)
     return written
 
 
@@ -914,8 +1048,21 @@ def _purge_stale_briefs():
             pass
 
 
-def write_grok_brief(metrics=None):
-    """Human + machine snapshot Grok can read to invent the next strategy."""
+def write_grok_brief(metrics=None, force=False):
+    """Human + machine snapshot Grok can read to invent the next strategy.
+
+    Throttled: full overlay dumps stall the next match on NAS.
+    """
+    global _GROK_LAST_GAMES
+    games = 0
+    try:
+        from optimizer.logger import Metrics
+        games = int(Metrics.read_games_total() or 0)
+    except Exception:
+        games = 0
+    if (not force) and _GROK_LAST_GAMES >= 0 and (games - _GROK_LAST_GAMES) < _GROK_BRIEF_EVERY:
+        return None
+    _GROK_LAST_GAMES = games
     if not STRATEGY_IDS:
         reload()
     lines = [
@@ -1002,13 +1149,33 @@ def write_grok_brief(metrics=None):
     if not os.path.exists(suggest):
         with open(suggest, 'w', encoding='utf-8') as f:
             f.write('# Strategy suggestions\n\nDrop invented templates in strategies/templates/.\n')
+    slim = {}
+    for t in TYPES:
+        bag = {}
+        for sid, ov in (TEAM_OVERLAYS.get(t) or {}).items():
+            st = (ov or {}).get('stats') or {}
+            bag[sid] = {
+                'id': sid,
+                'ticks': int(st.get('ticks') or 0),
+                'games': int(st.get('games') or 0),
+                'wins': float(st.get('wins') or 0),
+                'blunder': int(st.get('last_prey_blunder') or 0),
+                'ema': round(float(st.get('ema') or 0), 4),
+            }
+        slim[t] = bag
     snap = {
         'math': MATH_MODULES,
         'tactics': TACTICS,
-        'templates': STRATEGIES,
-        'overlays': TEAM_OVERLAYS,
+        'templates': {k: {
+            'id': k,
+            'mode': (v or {}).get('mode'),
+            'when': (v or {}).get('when'),
+            'tactics': (v or {}).get('tactics'),
+            'math': (v or {}).get('math'),
+        } for k, v in (STRATEGIES or {}).items()},
+        'overlays': slim,
         'ids': list(STRATEGY_IDS),
-        'bounds': _read_json(os.path.join(ROOT, 'bounds.json'), {}),
+        'games': games,
     }
     _write_json(os.path.join(grok, 'GROK_BRIEF.json'), snap)
     return path
@@ -1121,13 +1288,123 @@ def persist_learned(games_seen=0, changes=None):
                 prefix = '%s.%s.' % (tname, sid)
                 own = [c for c in note if str(c).startswith(prefix) or str(c).startswith(tname + '.')]
                 ov['last_changes'] = own[:8] if own else note[:4]
-    written = save_all_overlays()
+    global _LAST_WRITTEN
+    written = save_all_overlays(force=False)
+    pending = []
+    seen = set()
+    for p in list(written) + list(_LAST_WRITTEN):
+        if p and p not in seen:
+            seen.add(p)
+            pending.append(p)
+    _LAST_WRITTEN = []
     for t in TYPES:
         try:
             os.remove(_profile_path(t))
         except Exception:
             pass
-    return written or [os.path.join(TYPES_DIR, t) for t in TYPES]
+        if any(os.path.basename(os.path.dirname(p)) == t for p in pending):
+            write_type_index(t)
+    try:
+        from config import Config
+        fast = bool(getattr(Config, 'FAST_SIM', False))
+    except Exception:
+        fast = False
+    try:
+        if not fast:
+            full = bool(games_seen) and (int(games_seen) % 200 == 0)
+            publish_to_js(paths=pending, full=full)
+    except Exception:
+        pass
+    try:
+        if not fast:
+            write_grok_brief(force=False)
+    except Exception:
+        pass
+    return pending
+
+
+def write_type_index(type_name):
+    """JS loadTeamBook reads types/{T}/index.json. Keep it next to the overlays."""
+    d = os.path.join(TYPES_DIR, type_name)
+    names = []
+    try:
+        for fn in sorted(os.listdir(d)):
+            if not fn.endswith('.json') or fn.endswith('.tmp.json'):
+                continue
+            if '.tmp' in fn:
+                continue
+            sid = fn[:-5]
+            if sid == 'index':
+                continue
+            names.append(sid)
+    except Exception:
+        return None
+    path = os.path.join(d, 'index.json')
+    _write_json(path, names)
+    return path
+
+
+def publish_to_js(dest=None, paths=None, full=False):
+    """Mirror strategy JSON into rps_pub/strategies so the embed is a copy, not a fork."""
+    import shutil
+    dest = dest or JS_STRATEGIES
+    if not dest or not os.path.isdir(os.path.dirname(dest)):
+        return []
+    os.makedirs(dest, exist_ok=True)
+    copied = []
+    if not full:
+        for src in paths or ():
+            if not src or not os.path.isfile(src):
+                continue
+            try:
+                rel = os.path.relpath(src, ROOT)
+            except Exception:
+                continue
+            if rel.startswith('..'):
+                continue
+            dst = os.path.join(dest, rel)
+            os.makedirs(os.path.dirname(dst) or dest, exist_ok=True)
+            ov = _read_json(src, None)
+            if isinstance(ov, dict) and ov.get('id'):
+                _write_json(dst, _disk_overlay(ov, for_js=True))
+            else:
+                shutil.copy2(src, dst)
+            copied.append(dst)
+        return copied
+    skip_dir = {'__pycache__'}
+    skip_ext = {'.py', '.pyc', '.pyo', '.md'}
+    for root, dirs, files in os.walk(ROOT):
+        dirs[:] = [x for x in dirs if x not in skip_dir]
+        rel = os.path.relpath(root, ROOT)
+        out_dir = dest if rel == '.' else os.path.join(dest, rel)
+        os.makedirs(out_dir, exist_ok=True)
+        for fn in files:
+            if fn.endswith('.tmp') or '.tmp.' in fn:
+                continue
+            ext = os.path.splitext(fn)[1].lower()
+            if ext in skip_ext:
+                continue
+            if ext != '.json' and fn != 'SCHEMA.md':
+                continue
+            src = os.path.join(root, fn)
+            dst = os.path.join(out_dir, fn)
+            ov = _read_json(src, None)
+            if isinstance(ov, dict) and (ov.get('id') or ov.get('weights') or ov.get('when')):
+                _write_json(dst, _disk_overlay(ov, for_js=True))
+            else:
+                shutil.copy2(src, dst)
+            copied.append(dst)
+    for t in TYPES:
+        td = os.path.join(dest, 'types', t)
+        if not os.path.isdir(td):
+            continue
+        for fn in os.listdir(td):
+            if '.tmp' in fn:
+                try:
+                    os.remove(os.path.join(td, fn))
+                except Exception:
+                    pass
+    return copied
 
 
 
@@ -1195,8 +1472,25 @@ def credit_decisions(match):
     ticks = match.get('ticks') or {}
     mode_ticks = match.get('mode_ticks') or {}
     winner = str(match.get('winner') or '').upper()
-    MIN_CREDIT = 1
+    try:
+        set_match_context(match.get('teamSize'))
+    except Exception:
+        pass
+    MIN_CREDIT = 8
+    MIN_SHARE = 0.08
     EMA = 0.12
+    CARE_SIDS = {
+        'LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_STALL', 'LAST_MEAL_ORBIT',
+    }
+    SHORT_STATES = {
+        'LAST_PREY_RISK', 'LAST_MAN', 'NEAR_WIPE', 'NO_PREY_FEAR_ALIVE',
+    }
+    type_blunder = set()
+    for row in match.get('conversions') or []:
+        if int(row.get('last_prey_with_fear') or 0):
+            ht = str(row.get('winner_type') or '').upper()
+            if ht:
+                type_blunder.add(ht)
     for tname in types:
         bag = TEAM_OVERLAYS.setdefault(tname, {})
         used = ticks.get(tname) or {}
@@ -1205,42 +1499,57 @@ def credit_decisions(match):
         for sid, n in used.items():
             if sid not in bag:
                 continue
+            n = int(n or 0)
+            if n <= 0:
+                continue
             ov = bag[sid]
             st = _stats_bag(ov)
-            n = int(n or 0)
             st['ticks'] = int(st['ticks']) + n
             share = n / type_ticks
-            # Glimpse only: do not treat a 2-tick flicker as a game/win.
-            care = sid in ('LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_STALL')
-            if n < (1 if care else MIN_CREDIT):
+            care = sid in CARE_SIDS
+            state_bag = ((match.get('state_ticks') or {}).get(tname) or {}).get(sid) or {}
+            if not isinstance(state_bag, dict):
+                state_bag = {}
+            short_n = sum(int(v or 0) for k, v in state_bag.items() if str(k) in SHORT_STATES)
+            credited = (n >= 1) if (care or short_n >= 1) else (n >= MIN_CREDIT and share >= MIN_SHARE)
+            if not credited:
                 st['glimpse'] = int(st.get('glimpse') or 0) + 1
                 payoff = -0.02
             else:
                 st['games'] = int(st['games']) + 1
-                if tname == winner:
-                    st['wins'] = float(st.get('wins') or 0) + share
-                payoff = (share if tname == winner else -0.25 * share)
-            st['ema'] = (1.0 - EMA) * float(st.get('ema') or 0) + EMA * payoff
-            if n >= (1 if care else MIN_CREDIT):
-                if tname == winner:
-                    st['alpha'] = float(st.get('alpha') or 1.0) + share
+                if care:
+                    clean = tname not in type_blunder
+                    payoff = 0.15 * share + (0.28 if clean else -0.40)
                 else:
-                    st['beta'] = float(st.get('beta') or 1.0) + share
-                if int(st.get('last_prey_blunder') or 0) and care is False:
-                    st['beta'] = float(st.get('beta') or 1.0) + 0.4
-            state_bag = ((match.get('state_ticks') or {}).get(tname) or {}).get(sid) or {}
+                    if tname == winner:
+                        st['wins'] = float(st.get('wins') or 0) + share
+                        st['alpha'] = float(st.get('alpha') or 1.0) + share
+                    else:
+                        st['beta'] = float(st.get('beta') or 1.0) + share
+                    payoff = (share if tname == winner else -0.25 * share)
+                    if int(st.get('last_prey_blunder') or 0):
+                        st['beta'] = float(st.get('beta') or 1.0) + 0.4
+            st['ema'] = (1.0 - EMA) * float(st.get('ema') or 0) + EMA * payoff
             bys = dict(st.get('by_state') or {})
-            for stname, cn in state_bag.items():
+            for stname, cn in (state_bag or {}).items():
                 cn = int(cn or 0)
                 if cn <= 0:
                     continue
+                stname = str(stname)
                 slot = dict(bys.get(stname) or {'n': 0, 'alpha': 1.0, 'beta': 1.0, 'ema': 0.0})
                 slot['n'] = int(slot.get('n') or 0) + cn
-                frac = cn / max(1.0, float(n))
-                if n >= MIN_CREDIT and tname == winner:
-                    slot['alpha'] = float(slot.get('alpha') or 1.0) + share * frac
-                elif n >= MIN_CREDIT:
-                    slot['beta'] = float(slot.get('beta') or 1.0) + share * frac
+                state_credit = (cn >= 1) if stname in SHORT_STATES else credited
+                if state_credit:
+                    frac = share * (cn / float(n))
+                    if care:
+                        if tname not in type_blunder:
+                            slot['alpha'] = float(slot.get('alpha') or 1.0) + frac
+                        else:
+                            slot['beta'] = float(slot.get('beta') or 1.0) + frac
+                    elif tname == winner:
+                        slot['alpha'] = float(slot.get('alpha') or 1.0) + frac
+                    else:
+                        slot['beta'] = float(slot.get('beta') or 1.0) + frac
                 slot['ema'] = 0.88 * float(slot.get('ema') or 0) + 0.12 * payoff
                 bys[stname] = slot
             st['by_state'] = bys
@@ -1253,7 +1562,8 @@ def credit_decisions(match):
             st['by_mode'] = by
             ov['stats'] = st
             bag[sid] = ov
-            _DIRTY_OVERLAYS.add((tname, sid))
+            if credited:
+                _DIRTY_OVERLAYS.add((tname, sid))
         TEAM_OVERLAYS[tname] = bag
     for row in match.get('conversions') or []:
         wt = str(row.get('winner_type') or '').upper()
@@ -1270,7 +1580,9 @@ def credit_decisions(match):
             'ETA_STRIKE', 'LANE_SWEEP', 'PAIR_LOCK', 'WALL_POUNCE',
             'SCREEN_HUNT', 'ROLE_SWEEP',
         }
-        CARE_SIDS = {'LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_STALL'}
+        CARE_SIDS = {
+            'LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_STALL', 'LAST_MEAL_ORBIT',
+        }
         if blunder and wt:
             used = (match.get('ticks') or {}).get(wt) or {}
             hunt_used = [(s, int(n or 0)) for s, n in used.items() if s in HUNT_BLAME]
@@ -1282,6 +1594,13 @@ def credit_decisions(match):
                     bst['last_prey_blunder'] = int(bst['last_prey_blunder']) + 1
                     bst['ema'] = float(bst.get('ema') or 0) - 0.45
                     bst['beta'] = float(bst.get('beta') or 1.0) + 1.4
+                    bys = dict(bst.get('by_state') or {})
+                    slot = dict(bys.get('LAST_PREY_RISK') or {'n': 0, 'alpha': 1.0, 'beta': 1.0, 'ema': 0.0})
+                    slot['n'] = int(slot.get('n') or 0) + 1
+                    slot['beta'] = float(slot.get('beta') or 1.0) + 1.4
+                    slot['ema'] = float(slot.get('ema') or 0) - 0.45
+                    bys['LAST_PREY_RISK'] = slot
+                    bst['by_state'] = bys
                     bov['stats'] = bst
                     TEAM_OVERLAYS[wt][blame_sid] = bov
                     _DIRTY_OVERLAYS.add((wt, blame_sid))
@@ -1289,20 +1608,20 @@ def credit_decisions(match):
         if wt in TEAM_OVERLAYS and ws in (TEAM_OVERLAYS.get(wt) or {}):
             ov = TEAM_OVERLAYS[wt][ws]
             st = _stats_bag(ov)
-            st['conversions_for'] = int(st['conversions_for']) + 1
-            if blunder:
-                # CARE on the contact is occupancy, not the herding failure.
-                if ws in CARE_SIDS:
+            if ws in CARE_SIDS:
+                # Forced stall occupancy — do not treat contact as a hunt conversion.
+                if blunder:
                     st['ema'] = float(st.get('ema') or 0) - 0.05
-                    st['beta'] = float(st.get('beta') or 1.0) + 0.15
-                else:
+            else:
+                st['conversions_for'] = int(st['conversions_for']) + 1
+                if blunder:
                     st['last_prey_blunder'] = int(st['last_prey_blunder']) + 1
                     st['ema'] = float(st.get('ema') or 0) - 0.35
                     st['beta'] = float(st.get('beta') or 1.0) + 1.2
-            else:
-                st['ema'] = float(st.get('ema') or 0) + 0.04
-                st['alpha'] = float(st.get('alpha') or 1.0) + 0.35
-            if lt in ('ROCK', 'PAPER', 'SCISSORS'):
+                else:
+                    st['ema'] = float(st.get('ema') or 0) + 0.04
+                    st['alpha'] = float(st.get('alpha') or 1.0) + 0.35
+            if lt in ('ROCK', 'PAPER', 'SCISSORS') and ws not in CARE_SIDS:
                 vs = dict(st.get('by_vs') or {})
                 slotv = dict(vs.get(lt) or {'alpha': 1.0, 'beta': 1.0, 'n': 0})
                 slotv['n'] = int(slotv.get('n') or 0) + 1
@@ -1310,7 +1629,7 @@ def credit_decisions(match):
                     slotv['beta'] = float(slotv.get('beta') or 1.0) + 1.0
                 else:
                     slotv['alpha'] = float(slotv.get('alpha') or 1.0) + 0.4
-                vs[lt] = slotv
+                vs[lt] = _shrink_ab(slotv)
                 st['by_vs'] = vs
             if blocked:
                 st['blocked_womble'] = int(st['blocked_womble']) + 1
@@ -1364,11 +1683,16 @@ def credit_decisions(match):
                 f.write('rl.settle_game failed: %s\n' % e)
         except Exception:
             pass
+    try:
+        from optimizer import mcts as _mcts
+        _mcts.flush()
+    except Exception:
+        pass
     invalidate_spec_cache()
 
 
 def strategy_decision_score(type_name, strategy_id):
-    """Per-role payoff. Stall/last-man score time-alive, hunters score conversions."""
+    """Per-role payoff in roughly [-2, 2]. Blunders are a rate, not a count."""
     ov = (TEAM_OVERLAYS.get(type_name) or {}).get(strategy_id) or {}
     st = ov.get('stats') or {}
     cf = float(st.get('conversions_for') or 0)
@@ -1377,20 +1701,27 @@ def strategy_decision_score(type_name, strategy_id):
     games = max(1.0, float(st.get('games') or 1))
     ticks = float(st.get('ticks') or 0)
     wr = float(st.get('wins') or 0) / games
+    bl_rate = min(1.0, bl / games)
     states = set(((ov.get('when') or {}).get('states') or []))
     sid = str(strategy_id or '')
     stall = bool(states & {'LAST_PREY_RISK', 'LAST_MAN', 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE', 'OUTNUMBERED'})
     stall = stall or sid in (
         'LAST_MEAL_STALL', 'LAST_MAN_RUN', 'LAST_STAND', 'DELAY_FEAST',
-        'SURVIVE_FEAR', 'BOUNCE_JUKE', 'ESCORT_RING')
-    hunt_clear = 'CLEAR_HUNT' in states or sid in ('CLEAR_SPLIT',)
+        'SURVIVE_FEAR', 'BOUNCE_JUKE', 'ESCORT_RING', 'LAST_PREY_CARE',
+        'LAST_MEAL_ORBIT')
+    hunt_clear = 'CLEAR_HUNT' in states or sid in ('CLEAR_SPLIT', 'CLEAR_FAN')
     ema = st.get('ema')
-    ema_f = float(ema) if ema is not None else 0.0
+    ema_f = max(-1.0, min(1.0, float(ema) if ema is not None else 0.0))
     if stall:
-        return 0.55 * ema_f + (ticks / max(80.0, games * 60.0)) + wr - 4.0 * bl - 0.15 * ca
-    if hunt_clear:
-        return 0.45 * ema_f + (cf / max(20.0, ticks)) * 8.0 + wr - 3.0 * bl
-    return 0.50 * ema_f + (cf - ca) / max(8.0, ticks / 10.0) - 3.0 * bl + 0.5 * wr
+        alive = math.tanh(ticks / max(80.0, games * 80.0))
+        score = 0.45 * ema_f + 0.25 * alive + 0.20 * wr - 1.6 * bl_rate
+    elif hunt_clear:
+        krate = math.tanh(8.0 * cf / max(20.0, ticks))
+        score = 0.40 * ema_f + 0.35 * krate + 0.20 * wr - 1.4 * bl_rate
+    else:
+        conv = math.tanh((cf - ca) / max(8.0, ticks / 10.0))
+        score = 0.40 * ema_f + 0.30 * conv + 0.25 * wr - 1.5 * bl_rate
+    return max(-2.0, min(2.0, score))
 
 
 def apply_learned(type_name, key, value):

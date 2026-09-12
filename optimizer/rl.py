@@ -93,13 +93,53 @@ def _mc_update(type_name, G):
         q_set(type_name, s, a, q + ALPHA * (G - q))
 
 
+def _dur_scale():
+    """FAST_SIM matches are ~1–8s of tick time; live is ~20–50s."""
+    try:
+        from config import Config
+        if getattr(Config, 'FAST_SIM', False):
+            return 0.28
+    except Exception:
+        pass
+    return 1.0
+
+
+def _num(v, default=0.0):
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return float(v)
+    return float(default)
+
+
+def _state_occupancy(state_ticks, type_name):
+    """Flatten to {state: ticks}.
+
+    Logger sends strategy_state_ticks as {type: {sid: {state: n}}}.
+    Older callers may pass {type: {state: n}}.
+    """
+    bag = (state_ticks or {}).get(type_name) or {}
+    if not isinstance(bag, dict):
+        return {}
+    out = {}
+    for k, v in bag.items():
+        if isinstance(v, dict):
+            for st, n in v.items():
+                out[str(st)] = out.get(str(st), 0.0) + _num(n)
+        else:
+            out[str(k)] = out.get(str(k), 0.0) + _num(v)
+    return out
+
+
 def episode_return(type_name, winner, duration_s, wipe_by_type,
                    endgame_s=0.0, endgame_hunter=None, state_ticks=None):
     """Scalar G for this type this match."""
-    dur = float(duration_s or 0)
-    eg = float(endgame_s or 0)
+    dur = _num(duration_s)
+    eg = _num(endgame_s)
     won = 1.0 if str(winner or '').upper() == type_name else 0.0
-    wiped = float((wipe_by_type or {}).get(type_name, 0) or 0) > 0
+    wiped = _num((wipe_by_type or {}).get(type_name, 0)) > 0
+    sc = _dur_scale()
+    wipe_short = 22.0 * sc
+    dur_center = 24.0 * sc
+    dur_span = max(2.0, 16.0 * sc)
 
     # 1. Win
     G = 1.15 * won
@@ -107,26 +147,26 @@ def episode_return(type_name, winner, duration_s, wipe_by_type,
     # 2. Last-meal discipline. Duration is the proxy: short + wipe = disaster.
     if wiped:
         G -= 2.80
-        G -= 0.55 * max(0.0, (22.0 - dur) / 22.0)
+        G -= 0.55 * max(0.0, (wipe_short - dur) / max(1e-6, wipe_short))
         G -= 0.25 * won          # a win that came from popping last prey is not a win
     else:
-        G += 0.40 * math.tanh((dur - 24.0) / 16.0)
-        occ = ((state_ticks or {}).get(type_name) or {})
-        care = float(occ.get('LAST_PREY_RISK', 0) or 0)
-        total = sum(float(v or 0) for v in occ.values()) or 1.0
+        G += 0.40 * math.tanh((dur - dur_center) / dur_span)
+        occ = _state_occupancy(state_ticks, type_name)
+        care = occ.get('LAST_PREY_RISK', 0.0)
+        total = sum(occ.values()) or 1.0
         if care / total > 0.06:
             G += 0.22
 
     # 3. Endgame role split
     hunter = (endgame_hunter.name if hasattr(endgame_hunter, 'name')
               else str(endgame_hunter or '')).upper()
-    if eg > 0.4:
+    if eg > 0.4 * sc:
         if hunter == type_name:
             # Predator: shorter finish is better
-            G += 0.35 * math.tanh((8.0 - eg) / 7.0)
+            G += 0.35 * math.tanh((8.0 * sc - eg) / max(1.5, 7.0 * sc))
         elif won == 0.0:
             # Prey being cleaned: longer evade is better
-            G += 0.35 * math.tanh((eg - 14.0) / 10.0)
+            G += 0.35 * math.tanh((eg - 14.0 * sc) / max(2.0, 10.0 * sc))
 
     return max(-5.0, min(4.0, G))
 
@@ -138,17 +178,21 @@ def settle_game(winner, duration_s, wipe_by_type, state_ticks=None,
     for t, bag in (ticks or {}).items():
         t = str(t).upper()
         for sid, n in (bag or {}).items():
-            if int(n or 0) <= 0:
+            if _num(n) <= 0:
                 continue
             st_bag = ((state_ticks or {}).get(t) or {}).get(sid) or {}
-            st_name = 'CONTESTED'
-            if st_bag:
-                st_name = max(st_bag.items(), key=lambda kv: int(kv[1] or 0))[0]
-            elif t in (wipe_by_type or {}) and wipe_by_type.get(t):
-                st_name = 'LAST_PREY_RISK'
-            remember(t, st_name, sid, prey_count=2 if st_name == 'LAST_PREY_RISK' else 4,
-                     fear_count=1 if st_name in ('LAST_PREY_RISK', 'NO_PREY_FEAR_ALIVE',
-                                                'OUTNUMBERED', 'NEAR_WIPE', 'LAST_MAN') else 0)
+            names = []
+            if isinstance(st_bag, dict) and st_bag:
+                names = [k for k, v in st_bag.items() if _num(v) > 0]
+            if not names:
+                if t in (wipe_by_type or {}) and wipe_by_type.get(t):
+                    names = ['LAST_PREY_RISK']
+                else:
+                    names = ['CONTESTED']
+            for st_name in names:
+                remember(t, st_name, sid, prey_count=2 if st_name == 'LAST_PREY_RISK' else 4,
+                         fear_count=1 if st_name in ('LAST_PREY_RISK', 'NO_PREY_FEAR_ALIVE',
+                                                    'OUTNUMBERED', 'NEAR_WIPE', 'LAST_MAN') else 0)
     for t in ('ROCK', 'PAPER', 'SCISSORS'):
         G = episode_return(
             t, winner, duration_s, wipe_by_type,

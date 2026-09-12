@@ -243,5 +243,19 @@
     "knob": "desync_span",
     "goal": "team",
     "desc": "fan headings so mirrored cards do not clone one path"
+  },
+  "hash_melee": {
+    "math": "hash",
+    "fn": "SpatialHash.query",
+    "knob": "sep_distance",
+    "goal": "individual",
+    "desc": "pick the nearest prey inside the spatial hash, ignore the far blob"
+  },
+  "los_spring": {
+    "math": "cover",
+    "fn": "FortLOS.clear",
+    "knob": "fort_ambush_bonus",
+    "goal": "individual",
+    "desc": "hold cover until the line to prey is clear, then intercept"
   }
 }

@@ -15,6 +15,7 @@ from optimizer.paths import METRICS
 VIS_PATH = os.path.join(METRICS, "mcts_visits.json")
 C_UCT = 0.85
 _VISITS = {}  # type -> sid -> n
+_DIRTY = False
 
 
 def _load_vis():
@@ -101,7 +102,17 @@ def pick(type_name, legal, state=None, opponent=None, n_sims=24):
         stats[a][1] = n + 1.0
         N += 1.0
         bag[a] = bag.get(a, 0) + 1
-    _save_vis()
+    global _DIRTY
+    _DIRTY = True
     # exploit: most visits at root, tie-break on mean
     best = max(legal, key=lambda s: (stats[s][1], stats[s][0]))
     return best
+
+
+def flush():
+    """Write visit counts once per match, not on every CONTESTED pick."""
+    global _DIRTY
+    if not _DIRTY:
+        return
+    _save_vis()
+    _DIRTY = False

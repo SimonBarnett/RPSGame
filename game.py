@@ -100,8 +100,12 @@ def learn(n=None):
     try:
       while forever or i < int(n):
         i += 1
-        w.teamSize = random.randint(5, 9)
-        w.forts = random.randint(3, 6)
+        if random.random() < 0.35:
+            w.teamSize = random.randint(5, 20)
+            w.forts = random.randint(4, 10)
+        else:
+            w.teamSize = random.randint(5, 9)
+            w.forts = random.randint(3, 6)
         w.reset()
         try:
             w.metrics.reset_match()
@@ -112,11 +116,12 @@ def learn(n=None):
         while w.running and not w.gameover() and frames < 2400:
             w.draw()
             frames += 1
-        winner = 'NONE'
         pending = getattr(w, '_pending_gameover_type', None)
+        timed_out = pending is None and frames >= 2400
+        winner = 'NONE'
         if pending is not None:
             winner = pending.name if hasattr(pending, 'name') else str(pending)
-        elif w.particles:
+        elif (not timed_out) and w.particles:
             winner = w.particles[0].type.name
         wins[winner] = wins.get(winner, 0) + 1
         counts = {}
@@ -126,9 +131,12 @@ def learn(n=None):
             pass
         print('game %02d  frames=%d  %.2fs  team=%d  forts=%d  winner=%s  left=%s' % (
             i, frames, time.time() - g0, w.teamSize, w.forts, winner, counts), flush=True)
-        if pending is not None and hasattr(w, 'metrics'):
+        log_winner = pending
+        if log_winner is None and (not timed_out) and w.particles:
+            log_winner = w.particles[0].type
+        if hasattr(w, 'metrics'):
             try:
-                w.metrics.log_gameover(pending)
+                w.metrics.log_gameover(log_winner)
             except Exception as e:
                 print('log_gameover', e, flush=True)
         w._pending_gameover_type = None
@@ -141,6 +149,12 @@ def learn(n=None):
             print('  optimise', e, flush=True)
     except KeyboardInterrupt:
         print('\nstopped after %d games' % i, flush=True)
+    try:
+        import strategies.playbook as playbook
+        njs = playbook.publish_to_js(full=True)
+        print('published js copies %d' % len(njs or []), flush=True)
+    except Exception as e:
+        print('publish_to_js', e, flush=True)
     print('done in %.1fs  wins=%s' % (time.time() - t0, wins), flush=True)
     return wins
 

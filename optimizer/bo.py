@@ -14,8 +14,13 @@ MAX_OBS = 40
 N_CAND = 256
 NOISE = 0.10
 XI = 0.02
-STEP = 0.40          # blend current → x_star
+STEP = 0.18          # small blend; one heavy gen must not rewrite the card
+MIN_OBS = 3
 SKIP_PRIORITY = True
+SKIP_SWITCH = True   # hold_frames / margin are select policy, not combat knobs
+SKIP_MOVEMENT = True  # movement[] blends are structure, not EI knobs
+LAST_MIGRATE = 0
+LAST_SKIP = None
 
 
 def _rbf(X, Z, length, signal):
@@ -97,6 +102,10 @@ def current_vector(overlay, tunables):
     for path, bounds in (tunables or {}).items():
         if SKIP_PRIORITY and (path == 'when.priority' or str(path).endswith('.priority')):
             continue
+        if SKIP_SWITCH and path.startswith('switch.'):
+            continue
+        if SKIP_MOVEMENT and str(path).startswith('movement['):
+            continue
         if not isinstance(bounds, (list, tuple)) or len(bounds) < 2:
             continue
         keys.append(path)
@@ -119,6 +128,49 @@ def current_vector(overlay, tunables):
     return keys, np.array(lo), np.array(hi), np.array(x, dtype=float)
 
 
+def _project_bag(bag, keys):
+    """Keep aligned columns when the tunable key set drifts (e.g. SKIP_SWITCH)."""
+    global LAST_MIGRATE
+    old = list((bag or {}).get('keys') or [])
+    keys = list(keys)
+    if old == keys:
+        return bag or {'keys': keys, 'X': [], 'y': [], 'c': []}, False
+    if not old:
+        return {'keys': keys, 'X': [], 'y': [], 'c': []}, False
+    idx = [old.index(k) if k in old else None for k in keys]
+    Xn, yn, cn = [], [], []
+    X = list((bag or {}).get('X') or [])
+    y = list((bag or {}).get('y') or [])
+    c = list((bag or {}).get('c') or [])
+    for i, row in enumerate(X):
+        if not isinstance(row, (list, tuple)) or len(row) != len(old):
+            continue
+        newrow = []
+        kept = 0
+        for j in idx:
+            if j is None:
+                newrow.append(0.5)
+            else:
+                try:
+                    v = float(row[j])
+                except Exception:
+                    v = 0.5
+                newrow.append(max(0.0, min(1.0, v)))
+                kept += 1
+        if kept <= 0:
+            continue
+        Xn.append(newrow)
+        yn.append(float(y[i]) if i < len(y) else 0.0)
+        cn.append(float(c[i]) if i < len(c) else 0.0)
+    LAST_MIGRATE += 1
+    return {
+        'keys': keys,
+        'X': Xn[-MAX_OBS:],
+        'y': yn[-MAX_OBS:],
+        'c': cn[-MAX_OBS:],
+    }, True
+
+
 def record(overlay, tunables, y, constraint=0.0):
     """Append one (x, y, c) observation. c=1 if last-prey blunder this match."""
     keys, lo, hi, x = current_vector(overlay, tunables)
@@ -126,20 +178,11 @@ def record(overlay, tunables, y, constraint=0.0):
         return overlay
     st = dict((overlay or {}).get('stats') or {})
     bag = dict(st.get('bo') or {})
-    if bag.get('keys') != keys:
-        bag = {'keys': list(keys), 'X': [], 'y': [], 'c': []}
+    bag, _migrated = _project_bag(bag, keys)
     Xu = _unit(x, lo, hi).tolist()
     bag.setdefault('X', []).append(Xu)
     bag.setdefault('y', []).append(float(y))
     bag.setdefault('c', []).append(float(constraint))
-    if len(bag['y']) < 4:
-        u = np.asarray(Xu, dtype=float)
-        need = 4 - len(bag['y'])
-        for _ in range(need):
-            j = np.clip(u + np.random.normal(0, 0.04, size=u.shape), 0.0, 1.0)
-            bag['X'].append(j.tolist())
-            bag['y'].append(float(y) + float(np.random.normal(0, 0.03)))
-            bag['c'].append(float(constraint))
     bag['X'] = bag['X'][-MAX_OBS:]
     bag['y'] = bag['y'][-MAX_OBS:]
     bag['c'] = (bag.get('c') or [])[-MAX_OBS:]
@@ -150,21 +193,38 @@ def record(overlay, tunables, y, constraint=0.0):
 
 def propose(overlay, tunables, y_fallback=0.0):
     """Return nudged x (dict path→value) maximising noisy EI, or None."""
+    global LAST_SKIP
+    LAST_SKIP = None
     keys, lo, hi, x = current_vector(overlay, tunables)
     if not keys:
+        LAST_SKIP = 'no_keys'
         return None
     st = dict((overlay or {}).get('stats') or {})
     bag = dict(st.get('bo') or {})
+    bag, _ = _project_bag(bag, keys)
     X = list(bag.get('X') or [])
     y = list(bag.get('y') or [])
-    if len(y) < 4:
+    if len(y) < MIN_OBS:
+        LAST_SKIP = 'n=%d' % len(y)
         return None
-    # drop rows if key set drifted
     if bag.get('keys') != keys:
+        LAST_SKIP = 'key_mismatch'
         return None
     Xu = np.asarray(X, dtype=float)
     yv = np.asarray(y, dtype=float)
-    # candidates in unit cube: current + jitter + uniform
+    if Xu.ndim != 2 or Xu.shape[0] != yv.shape[0] or Xu.shape[1] != len(keys):
+        return None
+
+    def _toward(x_star):
+        x_next = x + STEP * (np.asarray(x_star, dtype=float) - x)
+        x_next = np.minimum(hi, np.maximum(lo, x_next))
+        return {k: float(v) for k, v in zip(keys, x_next)}
+
+    # Too few points for a stable GP: step toward the best observed x.
+    if len(y) < 6:
+        star = Xu[int(np.argmax(yv))]
+        return _toward(_from_unit(star, lo, hi))
+
     d = Xu.shape[1]
     u0 = _unit(x, lo, hi)
     cand = [u0]
@@ -176,7 +236,8 @@ def propose(overlay, tunables, y_fallback=0.0):
     try:
         mu, sig = _fit_predict(Xu, yv, Xs)
     except Exception:
-        return None
+        star = Xu[int(np.argmax(yv))]
+        return _toward(_from_unit(star, lo, hi))
     y_best = float(np.max(yv))
     acq = _ei(mu, sig, y_best)
     # Expected constrained improvement: P(blunder is low) from a second GP.
@@ -205,6 +266,10 @@ def apply_vector(overlay, vec, tunables):
     for path, val in vec.items():
         if SKIP_PRIORITY and (path == 'when.priority' or str(path).endswith('.priority')):
             continue
+        if SKIP_SWITCH and path.startswith('switch.'):
+            continue
+        if SKIP_MOVEMENT and str(path).startswith('movement['):
+            continue
         bounds = (tunables or {}).get(path)
         if bounds and len(bounds) >= 2:
             val = max(float(bounds[0]), min(float(bounds[1]), float(val)))
@@ -223,15 +288,21 @@ def apply_vector(overlay, vec, tunables):
     return overlay
 
 
-def payoff(overlay):
-    """Scalar y for the GP: Thompson mean + EMA − blunder rate."""
+def payoff(overlay, type_name=None, sid=None):
+    """Same hill as the playbook writer: bounded decision score − blunder rate."""
     st = (overlay or {}).get('stats') or {}
+    games = max(1.0, float(st.get('games') or 1.0))
+    bl = min(1.0, float(st.get('last_prey_blunder') or 0.0) / games)
+    t = type_name or (overlay or {}).get('type')
+    s = sid or (overlay or {}).get('id')
+    if t and s:
+        try:
+            from strategies.playbook import strategy_decision_score
+            return float(strategy_decision_score(t, s)) - 0.40 * bl
+        except Exception:
+            pass
     a = float(st.get('alpha') or 1.0)
     b = float(st.get('beta') or 1.0)
     th = a / max(1e-6, a + b)
     ema = float(st.get('ema') or 0.0)
-    games = max(1.0, float(st.get('games') or 1.0))
-    bl = float(st.get('last_prey_blunder') or 0.0) / games
-    # Last-prey blunders dominate: a doctrine that scrags the last meal
-    # while fear lives must look bad to EI even if it "won" the match.
     return 0.50 * th + 0.30 * ema - 3.2 * bl

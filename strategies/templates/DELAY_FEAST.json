@@ -42,12 +42,12 @@
     }
   ],
   "switch": {
-    "hold_frames": 5,
+    "hold_frames": 10,
     "margin": 1.0
   },
   "tunables": {
     "switch.hold_frames": [
-      2,
+      10,
       24,
       1
     ],

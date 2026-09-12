@@ -4,6 +4,7 @@
  */
 (function (global) {
   'use strict';
+  const BUILD = { n: 2, gen: 16, games: 8879, at: "2026-09-12 13:36Z", sha: "0aca8ae" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -60,7 +61,7 @@
 
   function AudioBus(base) {
     const root = String(base || './sound/').replace(/\/?$/, '/');
-    let ctx = null, enabled = true, lastClick = 0;
+    let ctx = null, enabled = false, lastClick = 0;
     const buffers = {};
     function ac() {
       if (!ctx) {
@@ -68,7 +69,7 @@
         if (!AC) return null;
         ctx = new AC();
       }
-      if (ctx.state === 'suspended') ctx.resume();
+      if (enabled && ctx.state === 'suspended') ctx.resume();
       return ctx;
     }
     function loadWav(name) {
@@ -226,6 +227,15 @@
     if (a == null) return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
     return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
   }
+  function mulberry32(seed) {
+    var a = seed | 0;
+    return function () {
+      a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, a | 1);
+      t = t + Math.imul(t ^ t >>> 7, t | 61) | 0;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
   function rand(a, b) { return a + Math.random() * (b - a); }
   function irand(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
   function angNorm(a) {
@@ -233,11 +243,15 @@
     if (a < 0) a += Math.PI * 2;
     return a;
   }
+  function snapVal(v, scale) { return Math.floor(v * scale + 0.5) / scale; }
+  function snapPose(p) {
+    p.x = snapVal(p.x, 1e4);
+    p.y = snapVal(p.y, 1e4);
+    p.angle = snapVal(angNorm(p.angle), 1e6);
+    p.speed = snapVal(Math.max(0, p.speed), 1e6);
+  }
   function angDiff(a, b) {
-    let d = angNorm(b) - angNorm(a);
-    if (d > Math.PI) d -= Math.PI * 2;
-    if (d < -Math.PI) d += Math.PI * 2;
-    return d;
+    return Math.atan2(Math.sin(b - a), Math.cos(b - a));
   }
   /** World heading from A to B under the 0=up convention. */
   function headingTo(ax, ay, bx, by) {
@@ -321,23 +335,24 @@
 
   // Mirrors config.effective_strategy _game_state (order matters).
   /** effective_strategy _game_state. Order is the Python order. */
-  function gameState(counts, type) {
+  function gameState(counts, type, lastPreyMax) {
     const selfN = counts[type] || 0;
     const preyN = counts[PREY[type]] || 0;
     const fearN = counts[FEAR[type]] || 0;
+    const lp = (lastPreyMax != null && isFinite(+lastPreyMax)) ? (+lastPreyMax | 0) : 2;
     if (selfN <= 0) return 'DEAD';
     if (fearN <= 0 && preyN > 0) return 'CLEAR_HUNT';
     if (fearN > 0 && preyN <= 0) return 'NO_PREY_FEAR_ALIVE';
     if (selfN === 1 && fearN > 0) return 'LAST_MAN';
     if (selfN <= 2 && fearN > 0) return 'NEAR_WIPE';
-    if (fearN > 0 && preyN <= 1) return 'LAST_PREY_RISK';
+    if (fearN > 0 && preyN <= lp) return 'LAST_PREY_RISK';
     if (fearN > selfN) return 'OUTNUMBERED';
     if (selfN <= 3 && fearN > 0) return 'SMALL_UNIT';
     return 'CONTESTED';
   }
   const CARD_FOR_STATE = {
     CLEAR_HUNT: ['CLEAR_SPLIT', 'CLEAR_FAN', 'FINISH_CLOCK', 'PACK_HUNT'],
-    LAST_PREY_RISK: ['LAST_PREY_CARE', 'LAST_MEAL_STALL', 'GIVE_GROUND', 'DELAY_FEAST'],
+    LAST_PREY_RISK: ['LAST_PREY_CARE', 'DELAY_FEAST', 'LAST_MEAL_ORBIT'],
     LAST_MAN: ['LAST_MAN_RUN', 'SURVIVE_FEAR', 'ORBIT_KITE'],
     NEAR_WIPE: ['LAST_MAN_RUN', 'SURVIVE_FEAR', 'SCATTER_RAID'],
     NO_PREY_FEAR_ALIVE: ['SURVIVE_FEAR', 'ORBIT_KITE', 'SHADOW_PREY', 'HOLD_COVER'],
@@ -345,7 +360,59 @@
     SMALL_UNIT: ['SCATTER_RAID', 'OPEN_KITE', 'SCREEN_HUNT'],
     CONTESTED: ['PACK_HUNT', 'SCREEN_HUNT', 'OPEN_KITE', 'ESCORT_RING']
   };
-  /** First legal card in CARD_FOR_STATE that exists on this type book. */
+  /** Play-only pick from JSON. Learning (UCB / Thompson / EI) stays in Python. */
+
+  function cardMean(spec, state) {
+    const st = (spec && spec.stats) || {};
+    const slot = ((st.by_state || {})[state]) || {};
+    const a = +(slot.alpha != null ? slot.alpha : (st.alpha != null ? st.alpha : 1));
+    const b = +(slot.beta != null ? slot.beta : (st.beta != null ? st.beta : 1));
+    if (!isFinite(a) || !isFinite(b) || a + b <= 0) return 0.33;
+    return a / (a + b);
+  }
+
+  function legalFromJson(book, state) {
+    const cards = (book && book.cards) || {};
+    const type = (book && book.type) || '';
+    const meta = (book && book.meta) || {};
+    const banned = (meta.banned && meta.banned[type]) || [];
+    const force = ((meta.force && meta.force[type]) || {})[state] || [];
+    const ids = Object.keys(cards);
+    let legal = [];
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      if (!id || id[0] === '_') continue;
+      const spec = cards[id] || {};
+      if (spec.enabled === false) continue;
+      if (banned.indexOf(id) >= 0) continue;
+      const states = (spec.when && spec.when.states) || [];
+      if (states.indexOf(state) >= 0) legal.push(id);
+    }
+    if (force.length) {
+      const forced = [];
+      for (let i = 0; i < force.length; i++) {
+        const id = force[i];
+        if (cards[id] && banned.indexOf(id) < 0) forced.push(id);
+      }
+      if (forced.length) legal = forced;
+    }
+    if (!legal.length) {
+      const pool = CARD_FOR_STATE[state] || CARD_FOR_STATE.CONTESTED;
+      for (let i = 0; i < pool.length; i++) {
+        if (cards[pool[i]] && banned.indexOf(pool[i]) < 0) legal.push(pool[i]);
+      }
+    }
+    if (state === 'LAST_PREY_RISK') {
+      const care = CARD_FOR_STATE.LAST_PREY_RISK || [];
+      legal = legal.filter(function (id) { return care.indexOf(id) >= 0; });
+      if (!legal.length) {
+        for (let i = 0; i < care.length; i++) {
+          if (cards[care[i]] && banned.indexOf(care[i]) < 0) legal.push(care[i]);
+        }
+      }
+    }
+    return legal;
+  }
 
   const DEFAULT_CARDS = {
     PACK_HUNT: { movement: [{fn:'sectors.orient',blend:0.35},{fn:'boids.desired_heading',blend:0.45},{fn:'intercept.heading',blend:0.4}] },
@@ -365,15 +432,26 @@
     SHADOW_PREY: { movement: [{fn:'roles.heading',blend:0.4},{fn:'cover.cover_heading',blend:0.3}] },
     HOLD_COVER: { movement: [{fn:'cover.cover_heading',blend:0.7}] },
     REGROUP_MASS: { movement: [{fn:'boids.desired_heading',blend:0.5}] },
-    SCATTER_RAID: { movement: [{fn:'boids.desired_heading',blend:0.35},{fn:'intercept.heading',blend:0.45}] }
+    SCATTER_RAID: { movement: [{fn:'boids.desired_heading',blend:0.35},{fn:'intercept.heading',blend:0.45}] },
+    HASH_MELEE: { movement: [{fn:'hash.heading',blend:0.7},{fn:'boids.desired_heading',blend:0.25}] },
+    LOS_SPRING: { movement: [{fn:'cover.clear',blend:0.7},{fn:'cover.cover_heading',blend:0.35}] }
   };
   function pickCard(book, state) {
-    const pool = CARD_FOR_STATE[state] || CARD_FOR_STATE.CONTESTED;
-    const cards = Object.assign({}, DEFAULT_CARDS, (book && book.cards) || {});
-    for (let i = 0; i < pool.length; i++) {
-      if (cards[pool[i]]) return pool[i];
+    const legal = legalFromJson(book, state);
+    if (!legal.length) {
+      const pool = CARD_FOR_STATE[state] || CARD_FOR_STATE.CONTESTED;
+      return pool[0];
     }
-    return pool[0];
+    const cards = (book && book.cards) || {};
+    let best = legal[0], bestS = -1e9;
+    for (let i = 0; i < legal.length; i++) {
+      const spec = cards[legal[i]] || {};
+      const pri = +((spec.when || {}).priority || 50);
+      const mu = cardMean(spec, state);
+      const s = mu * 10 + pri * 0.01;
+      if (s > bestS) { bestS = s; best = legal[i]; }
+    }
+    return best;
   }
   /** Playbook hold-frame hysteresis per type. */
   function pickCardHold(teamHold, type, book, state) {
@@ -390,7 +468,7 @@
       teamHold[type] = { card: desired, frames: 0 };
       return desired;
     }
-    const legal = CARD_FOR_STATE[state] || CARD_FOR_STATE.CONTESTED;
+    const legal = legalFromJson(book, state);
     if (legal.indexOf(slot.card) < 0) {
       teamHold[type] = { card: desired, frames: 0 };
       return desired;
@@ -432,10 +510,7 @@
   function sectorOf(bearing) {
     let best = 0, bd = 1e9;
     for (let i = 0; i < SECTORS.length; i++) {
-      let d = bearing - SECTORS[i].c;
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
-      d = Math.abs(d);
+      const d = Math.abs(angDiff(SECTORS[i].c, bearing));
       if (d < bd) { bd = d; best = i; }
     }
     return best;
@@ -563,9 +638,11 @@
     return map;
   }
   /** Compact boids: sep always; coh/ali off in CLEAR_HUNT; fear flee; prey pull. */
-  function swarmHeading(p, particles, state, prey, fear) {
+  function swarmHeading(p, particles, state, prey, fear, w) {
+    w = w || {};
     let sx = 0, sy = 0, cx = 0, cy = 0, ax = 0, ay = 0, nSep = 0, nCoh = 0;
-    const sepR = p.size * 3.0;
+    const sepMul = isFinite(+w.sep_distance) ? Math.max(0.6, Math.min(2.2, +w.sep_distance / 6.5)) : 1;
+    const sepR = p.size * 3.0 * sepMul;
     for (let i = 0; i < particles.length; i++) {
       const q = particles[i];
       if (q === p || q.type !== p.type) continue;
@@ -821,11 +898,16 @@
       }
     } else if (state === 'LAST_MAN' || state === 'NO_PREY_FEAR_ALIVE' || state === 'NEAR_WIPE') {
       const keep = [{ fn: 'sectors.orient', blend: 0.8 }];
+      const raid = state === 'LAST_MAN' && ctx.preyN > 0;
       list.forEach(function (s) {
         const fn = String((s || {}).fn || '');
-        if (fn.indexOf('orbit.') === 0 || fn.indexOf('time.') === 0 || fn.indexOf('intercept.') === 0) return;
+        if (!raid && (fn.indexOf('orbit.') === 0 || fn.indexOf('time.') === 0 || fn.indexOf('intercept.') === 0)) return;
         keep.push(s);
       });
+      if (raid && !keep.some(function (s) {
+        const fn = String((s || {}).fn || '');
+        return fn.indexOf('chase') >= 0 || fn.indexOf('intercept.') === 0;
+      })) keep.push({ fn: 'sectors.chase_heading', blend: 0.55 });
       list = keep;
     }
     function resolve(fn) {
@@ -840,6 +922,28 @@
       if (fn === 'intercept.heading' || fn === 'intercept.lead') return interceptHeading(p, prey, 'lead');
       if (fn === 'intercept.chord') return interceptHeading(p, prey, 'chord');
       if (fn === 'desync.heading') return desyncHeading(p, prey);
+      if (fn === 'voronoi.assign' || fn.indexOf('voronoi') >= 0) {
+        return prey ? chaseHeading(p, prey, ctx.look || 12) : null;
+      }
+      if (fn === 'hash.heading' || fn === 'hash.query' || fn.indexOf('hash') >= 0) {
+        return prey ? chaseHeading(p, prey, ctx.look || 12) : null;
+      }
+      if (fn === 'phys.bounce_heading' || fn === 'phys.bounce_walls' || fn.indexOf('bounce') >= 0) {
+        const W = ctx.W, H = ctx.H, m = p.size * 3.2;
+        let vx = Math.sin(p.angle), vy = -Math.cos(p.angle);
+        let hit = false;
+        if (p.x > W - m && vx > 0) { vx = -Math.abs(vx); hit = true; }
+        else if (p.x < m && vx < 0) { vx = Math.abs(vx); hit = true; }
+        if (p.y > H - m && vy > 0) { vy = -Math.abs(vy); hit = true; }
+        else if (p.y < m && vy < 0) { vy = Math.abs(vy); hit = true; }
+        return hit ? Math.atan2(vx, -vy) : null;
+      }
+      if (fn === 'cover.clear' || fn === 'cover.clear_heading' || fn === 'cover.occludes') {
+        if (prey && !fortOccludes(ctx.forts, p.x, p.y, prey.x, prey.y, 2)) {
+          return chaseHeading(p, prey, ctx.look || 12);
+        }
+        return coverHeading(p, fear, ctx.forts);
+      }
       if (fn === 'sectors.chase_heading' || fn.indexOf('chase') >= 0) return prey ? chaseHeading(p, prey, ctx.look || 12) : null;
       if (fn === 'sectors.orient' || fn.indexOf('fear') >= 0) return fear ? headingTo(fear.x, fear.y, p.x, p.y) : null;
       if (fn === 'boids.desired_heading' || fn.indexOf('boids') >= 0) return swarmHeading(p, ctx.particles, state, ctx.prey, ctx.fear);
@@ -864,7 +968,8 @@
   }
 
   /** Symmetric fort ring, inset from walls and HUD. */
-  function placeForts(W, H, n, pad) {
+  function placeForts(W, H, n, pad, randFn) {
+    const rnd = randFn || rand;
     const forts = [];
     n = Math.max(0, n | 0);
     if (!n) return forts;
@@ -876,9 +981,9 @@
     let tries = 0;
     const need = Math.ceil(n / 4);
     while (seeds.length < need && tries++ < 250) {
-      const r = rand(22, 36) * rMul;
-      const dist = rand(span * 0.16, span * 0.34);
-      const ang = rand(0.12, Math.PI / 2 - 0.12);
+      const r = rnd(22, 36) * rMul;
+      const dist = rnd(span * 0.16, span * 0.34);
+      const ang = rnd(0.12, Math.PI / 2 - 0.12);
       const x = clamp(cx + dist * Math.cos(ang), pad + r + 8, W - pad - r - 8);
       const y = clamp(cy + dist * Math.sin(ang), pad + r + 8, H - pad - r - 8);
       if (seeds.every(s => Math.hypot(x - s.x, y - s.y) >= r + s.r + gap)) {
@@ -896,15 +1001,45 @@
       }
     }
     while (forts.length < n && tries++ < 400) {
-      const r = rand(22, 34) * rMul;
-      const dist = rand(span * 0.18, span * 0.38);
-      const ang = rand(0, Math.PI * 2);
+      const r = rnd(22, 34) * rMul;
+      const dist = rnd(span * 0.18, span * 0.38);
+      const ang = rnd(0, Math.PI * 2);
       const x = clamp(cx + dist * Math.cos(ang), pad + r + 8, W - pad - r - 8);
       const y = clamp(cy + dist * Math.sin(ang), pad + r + 8, H - pad - r - 8);
       if (forts.some(f => Math.hypot(x - f.x, y - f.y) < r + f.r + gap)) continue;
       forts.push({ x: x, y: y, r: r, scale: 0 });
     }
     return forts;
+  }
+
+  function worldMetrics(W, H) {
+    const worldK = Math.min(W, H) / 800;
+    return {
+      W: W, H: H, worldK: worldK,
+      pad: Math.max(16, 28 * worldK),
+      body: 18 * worldK
+    };
+  }
+
+  function spawnParticles(W, H, teamSize, forts, pad, body, randFn) {
+    const rnd = randFn || rand;
+    const particles = [];
+    let id = 1;
+    const n = Math.max(1, teamSize | 0);
+    function spawn(type) {
+      let x = 0, y = 0, ok = false, tries = 0;
+      while (!ok && tries++ < 50) {
+        x = rnd(pad + body * 1.2, W - pad - body * 1.2);
+        y = rnd(pad + body * 1.2, H - pad - body * 1.2);
+        ok = forts.every(f => Math.hypot(x - f.x, y - f.y) > f.r + body * 1.5)
+          && particles.every(q => Math.hypot(x - q.x, y - q.y) > body * 2.3);
+      }
+      particles.push({ id: id++, type: type, x: x, y: y, angle: rnd(0, Math.PI * 2) });
+    }
+    for (let i = 0; i < n; i++) {
+      spawn('ROCK'); spawn('PAPER'); spawn('SCISSORS');
+    }
+    return particles;
   }
 
   function makeStars(W, H) {
@@ -929,43 +1064,33 @@
     // Reference short-axis 720px ≈ desktop window. Turn/frame stays fixed so
     // heading change per body-length is invariant.
     // PY arena ~1200x800, size 20. Desktop marble is 75% of the old JS 24 → 18.
-    const worldK = Math.min(W, H) / 800;
-    const pad = Math.max(16, 28 * worldK);
-    const body = 18 * worldK;
+    const seed = opts.seed != null ? (opts.seed >>> 0) : ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
+    const rng = mulberry32(seed);
+    function srand(a, b) { return a + rng() * (b - a); }
+    const wm = worldMetrics(W, H);
+    const worldK = wm.worldK;
+    const pad = wm.pad;
+    const body = wm.body;
     const teamSize = opts.teamSize || irand(6, 14);
     const nForts = opts.forts != null ? opts.forts : irand(4, 8);
     const books = opts.books || {};
+    const lastPreyMax = +(((books.ROCK || books.PAPER || books.SCISSORS || {}).meta || {}).last_prey_risk_max) || 2;
     const motion = Object.assign({}, DEFAULT_MOTION);
     for (const t of Object.keys(books)) {
       const b = books[t].base || {};
       if (b.speed_base) motion[t] = { speed: +b.speed_base, turn: +b.turn_base || motion[t].turn };
     }
 
-    const forts = placeForts(W, H, nForts, pad);
-    const particles = [];
-    let id = 1;
-    function spawn(type) {
-      let x, y, ok = false, tries = 0;
-      while (!ok && tries++ < 50) {
-        x = rand(pad + body * 1.2, W - pad - body * 1.2);
-        y = rand(pad + body * 1.2, H - pad - body * 1.2);
-        ok = forts.every(f => Math.hypot(x - f.x, y - f.y) > f.r + body * 1.5)
-          && particles.every(q => Math.hypot(x - q.x, y - q.y) > body * 2.3);
-      }
-      particles.push({
-        id: id++, type: type, x: x, y: y,
-        angle: rand(0, Math.PI * 2),
-        speed: motion[type].speed * CRUISE_MULT * 0.1 * worldK,
-        size: body,
-        roll: 0,
-        scale: 0,
-        _fear_intensity: 0,
-        _frames_since_fear: 0
-      });
-    }
-    for (let i = 0; i < teamSize; i++) {
-      spawn('ROCK'); spawn('PAPER'); spawn('SCISSORS');
-    }
+    const forts = placeForts(W, H, nForts, pad, srand);
+    const particles = spawnParticles(W, H, teamSize, forts, pad, body, srand);
+    particles.forEach(function (p) {
+      p.speed = (motion[p.type] || DEFAULT_MOTION[p.type]).speed * CRUISE_MULT * 0.1 * worldK;
+      p.size = body;
+      p.roll = 0;
+      p.scale = 0;
+      p._fear_intensity = 0;
+      p._frames_since_fear = 0;
+    });
     particles.forEach(function (p, i) {
       p.yOff = PARTICLE_RISE_PX;
       p.scale = 0.05;
@@ -1100,9 +1225,15 @@
       SCISSORS: { card: null, frames: 0 }
     };
 
+    function cardSpec(p) {
+      const book = books[p.type] || {};
+      return ((book.cards || {})[p.card]) || {};
+    }
     function maxSpeedOf(p, c) {
       const mot = motion[p.type];
-      let sp = mot.speed * CRUISE_MULT * worldK;
+      const spec = cardSpec(p);
+      const base = spec.base || (books[p.type] && books[p.type].base) || {};
+      let sp = (+base.speed_base || mot.speed) * CRUISE_MULT * worldK;
       const selfN = c[p.type] || 0;
       const fearN = c[FEAR[p.type]] || 0;
       if (selfN <= 2) sp *= 1.2;
@@ -1116,7 +1247,7 @@
       const selfN = c[p.type] || 0;
       const preyN = c[PREY[p.type]] || 0;
       const fearN = c[FEAR[p.type]] || 0;
-      const state = gameState(c, p.type);
+      const state = gameState(c, p.type, lastPreyMax);
       const book = books[p.type] || { cards: {} };
       p.card = pickCardHold(teamHold, p.type, book, state);
       p.state = state;
@@ -1136,7 +1267,10 @@
       }
       const fearMem = p._fear_intensity || 0;
       const mot = motion[p.type];
-      const maxTurn = mot.turn * Math.PI / 180;
+      const spec = cardSpec(p);
+      const base = spec.base || book.base || {};
+      const maxTurn = (+base.turn_base || mot.turn) * Math.PI / 180;
+      const w = spec.weights || {};
       const cruise = maxSpeedOf(p, c);
       let mode = 'idle';
       let want = p.angle;
@@ -1229,7 +1363,7 @@
 
       const we = wallEscape(p);
       if (we) want = blendHeadings(want, we.h, we.w);
-      const swarm = swarmHeading(p, particles, state, prey, fear);
+      const swarm = swarmHeading(p, particles, state, prey, fear, w);
       if (mode === 'evade') want = blendHeadings(want, swarm, 0.35);
       else if (mode === 'chase' && state !== 'CLEAR_HUNT') want = blendHeadings(want, swarm, 0.25);
 
@@ -1299,7 +1433,11 @@
       if (p.speed < targetSp) p.speed += Math.min(0.12, targetSp - p.speed);
       else p.speed += (targetSp - p.speed) * 0.12;
       if (p.speed > cruise * 1.35) p.speed = cruise * 1.35;
-      } catch (err) { /* keep moving; file:// / missing fear must not stall */ }
+      } catch (err) {
+        if (opts.onThinkError) {
+          try { opts.onThinkError(err, p); } catch (e2) {}
+        }
+      }
     }
 
     /** Convert-on-contact (RPS) or same-type separate. Collisions halve speed. */
@@ -1363,10 +1501,12 @@
         winner = alive[0] || 'NONE';
       }
       const playAI = move && !winner;
-      if (playAI) {
-        for (const p of particles) think(p, c);
-      } else if (!move) {
-        for (const p of particles) think(p, c);
+      if (playAI || !move) {
+        for (const p of particles) {
+          think(p, c);
+          p.angle = snapVal(angNorm(p.angle), 1e6);
+          p.speed = snapVal(Math.max(0, p.speed), 1e6);
+        }
       }
       if (move || keepAlive) {
         for (const p of particles) {
@@ -1375,11 +1515,16 @@
           p.y -= Math.cos(p.angle) * p.speed;
           const dist = Math.hypot(p.x - ox, p.y - oy);
           if (dist > 0.15) p.roll = (p.roll || 0) + 0.85 * dist / Math.max(4, p.size);
+          p.x = snapVal(p.x, 1e4);
+          p.y = snapVal(p.y, 1e4);
         }
         collide(!winner);
-        for (const p of particles) { bounceWall(p); bounceFort(p);
-      p.x = Math.max(p.size + 2, Math.min(W - p.size - 2, p.x));
-      p.y = Math.max(p.size + 2, Math.min(H - p.size - 2, p.y)); }
+        for (const p of particles) {
+          bounceWall(p); bounceFort(p);
+          p.x = Math.max(p.size + 2, Math.min(W - p.size - 2, p.x));
+          p.y = Math.max(p.size + 2, Math.min(H - p.size - 2, p.y));
+          snapPose(p);
+        }
       }
     }
 
@@ -1654,7 +1799,7 @@
   }
 
   /** C64-style title card: raster bars, spinning type orbs. */
-  function drawWelcome(ctx, W, H, t) {
+  function drawWelcome(ctx, W, H, t, muted) {
     const flicker = 0.92 + 0.08 * Math.sin(t * 0.33);
     const barH = Math.max(10, Math.min(16, H / 40));
     for (let i = 0; i < H / barH + 3; i++) {
@@ -1718,7 +1863,19 @@
     const readyPx = Math.max(12, Math.min(16, W * 0.042));
     ctx.font = readyPx + 'px Segoe UI, system-ui, sans-serif';
     ctx.fillStyle = 'rgba(200,210,230,0.7)';
-    ctx.fillText('GET READY', W / 2, Math.min(H * 0.88, orbY + orbitR * 0.5 + readyPx * 3));
+    ctx.fillText(muted ? 'TAP ANYWHERE FOR SOUND' : 'GET READY', W / 2, Math.min(H * 0.88, orbY + orbitR * 0.5 + readyPx * 3));
+    const stampY = Math.min(H - 30, orbY + orbitR * 0.5 + readyPx * 4.6);
+    const stampPx = Math.max(10, Math.min(13, W * 0.032));
+    ctx.font = stampPx + 'px Segoe UI, system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(160,175,200,0.85)';
+    const b = BUILD || {};
+    ctx.fillText(
+      'BUILD ' + (b.n || 0) + '   GEN ' + (b.gen || 0) + '   GAMES ' + (b.games || 0),
+      W / 2, stampY);
+    if (b.at || b.sha) {
+      ctx.fillStyle = 'rgba(140,155,180,0.65)';
+      ctx.fillText(String(b.at || '') + (b.sha ? '   ' + b.sha : ''), W / 2, stampY + stampPx + 2);
+    }
     ctx.restore();
   }
 
@@ -1821,11 +1978,17 @@
         PAPER: await loadTeamBook(strat, 'PAPER'),
         SCISSORS: await loadTeamBook(strat, 'SCISSORS')
       };
+      const metaRoot = String(strat).replace(/\/types\/?$/, '');
+      const meta = (await loadJSON(metaRoot + '/meta.json')) || {};
+      ['ROCK', 'PAPER', 'SCISSORS'].forEach(function (t) {
+        if (books[t]) books[t].meta = meta;
+      });
     } catch (e) {}
 
     let stars = makeStars(fit.w, fit.h);
     const sfx = AudioBus((origin || '.') + '/sound/');
-    let audioOn = true;
+    let audioOn = false;
+    sfx.on = false;
     let lastCount = 99;
     function makeSim() { return createSim({ books: books, width: fit.w, height: fit.h, teamSize: opts.teamSize, forts: opts.forts, onSfx: (k) => { if (audioOn) sfx[k] && sfx[k](); } }); }
     let sim = makeSim();
@@ -1847,13 +2010,20 @@
       phaseAt = performance.now();
     }
 
-    canvas.addEventListener('click', (ev) => {
-      sfx.prime();
+    canvas.addEventListener('pointerdown', function (ev) {
       const r = canvas.getBoundingClientRect();
       const x = ev.clientX - r.left, y = ev.clientY - r.top;
-      if (x > fit.w - (fit.w < 520 ? 70 : 130) && y < (fit.w < 520 ? 120 : 230)) {
-        audioOn = !audioOn;
-        sfx.on = audioOn;
+      const hudHit = x > fit.w - (fit.w < 520 ? 70 : 130) && y < (fit.w < 520 ? 120 : 230);
+      if (!audioOn) {
+        audioOn = true;
+        sfx.on = true;
+        sfx.prime();
+        return;
+      }
+      sfx.prime();
+      if (hudHit) {
+        audioOn = false;
+        sfx.on = false;
       }
     });
 
@@ -1923,7 +2093,7 @@
       ctx.fillRect(0, 0, fit.w, fit.h);
       drawStarfield(ctx, fit.w, fit.h, stars, now);
       if (phase === PHASE.TITLE) {
-        drawWelcome(ctx, fit.w, fit.h, elms);
+        drawWelcome(ctx, fit.w, fit.h, elms, !audioOn);
       } else {
         drawForts(ctx, sim.forts);
         for (const p of sim.particles) drawMarble(ctx, p, sim);
@@ -1952,5 +2122,11 @@
     opts.strategies = opts.strategies || (String(cdnOrigin).replace(/\/+$/, '') + '/strategies/types');
     return mount(target, opts);
   }
-  global.RPS = { mount: mount, embedFrom: embedFrom, createSim: createSim, COLOR: COLOR, PREY: PREY, FEAR: FEAR };
+  global.RPS = {
+    mount: mount, embedFrom: embedFrom, createSim: createSim,
+    COLOR: COLOR, PREY: PREY, FEAR: FEAR,
+    pickCard: pickCard, legalFromJson: legalFromJson, gameState: gameState,
+    mulberry32: mulberry32, placeForts: placeForts, spawnParticles: spawnParticles,
+    worldMetrics: worldMetrics
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

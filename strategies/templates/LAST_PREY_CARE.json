@@ -16,15 +16,16 @@
     "flock_sep",
     "give_ground"
   ],
-  "math": ["boids", "cover", "steer", "sectors"],
+  "math": ["orbit", "cover", "steer", "flow"],
   "movement": [
-    {"fn": "boids.desired_heading", "blend": 0.85},
-    {"fn": "cover.cover_heading", "blend": 0.45},
+    {"fn": "orbit.heading", "blend": 0.65},
+    {"fn": "cover.cover_heading", "blend": 0.4},
+    {"fn": "flow.heading", "blend": 0.3},
     {"fn": "steer.apply_wall_bias", "blend": 0.25}
   ],
   "switch": {"hold_frames": 10, "margin": 1.2},
   "tunables": {
-    "switch.hold_frames": [4, 24, 1],
+    "switch.hold_frames": [10, 24, 1],
     "switch.margin": [0.5, 2.0, 0.05],
     "escape_bonus": [0.6, 2.2, 0.04],
     "fear_close_mult": [1.2, 4.0, 0.05],

@@ -26,8 +26,12 @@
   ],
   "movement": [
     {
+      "fn": "phys.bounce_walls",
+      "blend": 0.55
+    },
+    {
       "fn": "steer._steer_around_walls",
-      "blend": 0.5
+      "blend": 0.45
     },
     {
       "fn": "steer._steer_around_forts",

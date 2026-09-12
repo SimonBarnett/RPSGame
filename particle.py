@@ -91,15 +91,17 @@ class Team:
             fear_count=fear, prey_count=prey)
         hunt_adv = st["hunt_advantage"]
         scatter_th = st["scatter_threshold"]
-        game_state = st.get("_game_state", "CONTESTED")
-        cut = playbook.endgame_switch(
-            self.type.name, game_state,
-            current=getattr(self, 'strategy_id', None),
-            fear=fear, prey=prey, self_count=self.count,
-            opponent=FEAR_OF[self.type].name)
-        if cut is not None:
-            sid, hold, switched = cut
-            self._endgame_switch = sid
+        try:
+            game_state = playbook.match_state(self.count, fear, prey)
+        except Exception:
+            game_state = st.get("_game_state", "CONTESTED")
+        # js_tick.think owns card pick (same as rps.js pickCardHold).
+        if getattr(self.world, '_js_hold', None):
+            slot = self.world._js_hold.get(self.type.name) or {}
+            sid = slot.get('card') or getattr(self, 'strategy_id', None) or 'PACK_HUNT'
+            hold = int(slot.get('frames') or 0)
+            switched = False
+            self._endgame_switch = None
         else:
             sid, hold, switched = playbook.select(
                 self.type.name, game_state,
@@ -157,29 +159,32 @@ class Team:
             self.alert_target = None
             self.alert_ttl = 0
             self.suggested_target = None
-            try:
-                prey_list = [q for q in self.world.particles if q.type == PREY_OF[self.type]]
-                hunters = list(self.members)
-                if prey_list and hunters and playbook.tactic_enabled(sid, 'voronoi_split', self.type.name):
-                    mapping = VoronoiEndgame.assign(self.world, hunters, prey_list, st)
-                    self.clear_hunt_map = mapping
-                    for h in hunters:
-                        hid = getattr(h, 'id', id(h))
-                        assigned = mapping.get(hid)
-                        if assigned is None and len(prey_list) >= 1:
-                            prey_s = sorted(prey_list, key=lambda q: getattr(q, 'id', id(q)))
-                            hunt_s = sorted(hunters, key=lambda q: getattr(q, 'id', id(q)))
-                            try:
-                                mi = next(i for i, x in enumerate(hunt_s) if x is h)
-                            except StopIteration:
-                                mi = abs(hash(hid)) % len(hunt_s)
-                            assigned = prey_s[mi % len(prey_s)]
-                        if assigned is not None:
-                            h._locked_target = assigned
-                            h._lock_ttl = 120
-                            h._clear_assigned_id = getattr(assigned, 'id', id(assigned))
-            except Exception:
-                self.clear_hunt_map = {}
+            # js_tick.think owns CLEAR_HUNT locks (same as rps.js). Writing
+            # _lock_ttl here expired/kept locks differently from JS.
+            if not getattr(self.world, '_js_hold', None):
+                try:
+                    prey_list = [q for q in self.world.particles if q.type == PREY_OF[self.type]]
+                    hunters = list(self.members)
+                    if prey_list and hunters and playbook.tactic_enabled(sid, 'voronoi_split', self.type.name):
+                        mapping = VoronoiEndgame.assign(self.world, hunters, prey_list, st)
+                        self.clear_hunt_map = mapping
+                        for h in hunters:
+                            hid = getattr(h, 'id', id(h))
+                            assigned = mapping.get(hid)
+                            if assigned is None and len(prey_list) >= 1:
+                                prey_s = sorted(prey_list, key=lambda q: getattr(q, 'id', id(q)))
+                                hunt_s = sorted(hunters, key=lambda q: getattr(q, 'id', id(q)))
+                                try:
+                                    mi = next(i for i, x in enumerate(hunt_s) if x is h)
+                                except StopIteration:
+                                    mi = abs(hash(hid)) % len(hunt_s)
+                                assigned = prey_s[mi % len(prey_s)]
+                            if assigned is not None:
+                                h._locked_target = assigned
+                                h._lock_ttl = 120
+                                h._clear_assigned_id = getattr(assigned, 'id', id(assigned))
+                except Exception:
+                    self.clear_hunt_map = {}
         elif near_wipe:
             self.mode = TeamMode.SCATTER
             self._mode_candidate = TeamMode.SCATTER
