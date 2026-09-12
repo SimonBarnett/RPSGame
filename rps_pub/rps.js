@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 8, gen: 16, games: 8879, at: "2026-09-12 14:26Z", sha: "b368d12" };
+  const BUILD = { n: 9, gen: 16, games: 8879, at: "2026-09-12 14:33Z", sha: "3523eb4" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1556,8 +1556,6 @@
     /** Convert-on-contact (RPS) or same-type separate. Collisions halve speed. */
     function collide(allowConvert) {
       if (allowConvert == null) allowConvert = true;
-      const cNow = counts();
-      const typesAlive = (cNow.ROCK > 0 ? 1 : 0) + (cNow.PAPER > 0 ? 1 : 0) + (cNow.SCISSORS > 0 ? 1 : 0);
       for (let i = 0; i < particles.length; i++) {
         const a = particles[i];
         for (let j = i + 1; j < particles.length; j++) {
@@ -1574,13 +1572,15 @@
           const aEats = PREY[a.type] === b.type;
           const bEats = PREY[b.type] === a.type;
           if (!aEats && !bEats) continue;
-          ensureVel(a); ensureVel(b);
-          const relN = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
           applyPairImpulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION);
-          if (!allowConvert || (typesAlive > 2 && relN < 0)) continue;
+          if (!allowConvert) continue;
           const winnerP = aEats ? a : b;
           const loser = aEats ? b : a;
           loser.type = winnerP.type;
+          const keep = (motion[winnerP.type] || DEFAULT_MOTION[winnerP.type]).speed * CRUISE_MULT * worldK * COLLISION_SPEED_KEEP;
+          a.speed = keep; b.speed = keep;
+          a.vx = Math.sin(a.angle) * keep; a.vy = -Math.cos(a.angle) * keep;
+          b.vx = Math.sin(b.angle) * keep; b.vy = -Math.cos(b.angle) * keep;
           if (opts.onSfx) opts.onSfx('collide');
         }
       }
@@ -1606,16 +1606,10 @@
         for (const p of particles) {
           ensureVel(p);
           const hx = Math.sin(p.angle), hy = -Math.cos(p.angle);
-          let vPar = p.vx * hx + p.vy * hy;
-          let px = p.vx - vPar * hx, py = p.vy - vPar * hy;
-          let dv = (p.speed || 0) - vPar;
-          if (dv > THRUST) dv = THRUST;
-          else if (dv < -THRUST) dv = -THRUST;
-          vPar += dv;
-          px *= (1 - SLIP_DAMP);
-          py *= (1 - SLIP_DAMP);
-          p.vx = vPar * hx + px;
-          p.vy = vPar * hy + py;
+          const sp = p.speed || 0;
+          const tx = hx * sp, ty = hy * sp;
+          p.vx = p.vx * 0.20 + tx * 0.80;
+          p.vy = p.vy * 0.20 + ty * 0.80;
           const ox = p.x, oy = p.y;
           p.x += p.vx;
           p.y += p.vy;

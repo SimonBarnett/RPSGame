@@ -1155,7 +1155,6 @@ def _unstick_friends(particles):
 
 def collide(world, allow_convert=True):
     particles = world.particles
-    types_alive = len({_tname(p) for p in particles})
     for i in range(len(particles)):
         a = particles[i]
         for j in range(i + 1, len(particles)):
@@ -1179,17 +1178,23 @@ def collide(world, allow_convert=True):
             b_eats = PREY_N.get(bn) == an
             if not a_eats and not b_eats:
                 continue
-            _ensure_vel(a)
-            _ensure_vel(b)
-            rel_n = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny
             _apply_pair_impulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION)
-            # Two types left: tag finishes the hunt (slow hunter vs fast kite).
-            if (not allow_convert) or (types_alive > 2 and rel_n < 0.0):
+            if not allow_convert:
                 continue
             winner_p = a if a_eats else b
             loser = b if a_eats else a
             lose_was = loser.type
             loser.type = winner_p.type
+            W = float(getattr(world, 'width', 800) or 800)
+            H = float(getattr(world, 'height', 600) or 600)
+            world_k = min(W, H) / 800.0
+            wn = _tname(winner_p)
+            mot = DEFAULT_MOTION.get(wn) or {'speed': 1.3}
+            keep = float(mot['speed']) * CRUISE_MULT * world_k * COLLISION_SPEED_KEEP
+            for body in (a, b):
+                body.speed = keep
+                body.vx = math.sin(body.angle) * keep
+                body.vy = -math.cos(body.angle) * keep
             try:
                 if hasattr(world, 'metrics') and world.metrics is not None:
                     world.metrics.log_conversion(winner_p, loser, loser_type_before=lose_was)
@@ -1249,18 +1254,10 @@ def step(world, move=True, keep_alive=False):
         for p in particles:
             _ensure_vel(p)
             hx, hy = math.sin(p.angle), -math.cos(p.angle)
-            v_par = p.vx * hx + p.vy * hy
-            px, py = p.vx - v_par * hx, p.vy - v_par * hy
-            dv = float(p.speed or 0) - v_par
-            if dv > THRUST:
-                dv = THRUST
-            elif dv < -THRUST:
-                dv = -THRUST
-            v_par += dv
-            px *= (1.0 - SLIP_DAMP)
-            py *= (1.0 - SLIP_DAMP)
-            p.vx = v_par * hx + px
-            p.vy = v_par * hy + py
+            sp = float(p.speed or 0)
+            tx, ty = hx * sp, hy * sp
+            p.vx = p.vx * 0.20 + tx * 0.80
+            p.vy = p.vy * 0.20 + ty * 0.80
             ox, oy = p.x, p.y
             p.x += p.vx
             p.y += p.vy
