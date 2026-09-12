@@ -1110,14 +1110,15 @@ def think(world, p, counts, W, H, pad, world_k, forts):
         if fd < p.size * 4.5:
             want = flee
             mode = 'evade'
-        elif fd < pd or (in_path and fd < pd + p.size * 2):
-            want = blend_headings(want, flee, 0.7)
+        elif fd < p.size * 6.5 and (fd < pd or in_path):
+            want = blend_headings(want, flee, 0.65)
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])
     eject = pack_eject(p, world.particles, W, H)
     if eject is not None:
-        want = blend_headings(want, eject, 0.85)
+        ew = 0.35 if (mode == 'chase' and prey and prey.get('obj') is not None) else 0.85
+        want = blend_headings(want, eject, ew)
     near_n = 0
     r5 = (p.size * 5) ** 2
     for q in allies:

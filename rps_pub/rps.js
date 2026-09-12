@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 19, gen: 8, games: 9054, at: "2026-09-12 17:17Z", sha: "a98881f" };
+  const BUILD = { n: 20, gen: 8, games: 9126, at: "2026-09-12 18:53Z", sha: "a14a321" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1515,12 +1515,15 @@
         const pd = (prey && prey.obj) ? prey.d : 1e9;
         const inPath = Math.abs(angDiff(want != null ? want : p.angle, fearH)) < 0.9;
         if (fd < p.size * 4.5) { want = flee; mode = 'evade'; }
-        else if (fd < pd || (inPath && fd < pd + p.size * 2)) want = blendHeadings(want, flee, 0.7);
+        else if (fd < p.size * 6.5 && (fd < pd || inPath)) want = blendHeadings(want, flee, 0.65);
       }
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
       const eject = packEject(p, particles);
-      if (eject != null) want = blendHeadings(want, eject, 0.85);
+      if (eject != null) {
+        const ew = (mode === 'chase' && prey && prey.obj) ? 0.35 : 0.85;
+        want = blendHeadings(want, eject, ew);
+      }
       let nearN = 0;
       const r5 = (p.size * 5) * (p.size * 5);
       for (let ai = 0; ai < allies.length; ai++) {
