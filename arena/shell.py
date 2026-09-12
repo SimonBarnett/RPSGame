@@ -1198,6 +1198,8 @@ class Arena:
         }
         self._js_voronoi = {'key': '', 'map': {}}
         self._js_tick_i = 0
+        self._js_dance = None
+        self._js_charge_ang = 1.2
         self._js_sized = False
         self._js_alive_one = False
         self._js_winner_seen = False

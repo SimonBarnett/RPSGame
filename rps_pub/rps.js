@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 13, gen: 16, games: 8895, at: "2026-09-12 14:59Z", sha: "48c9e0a" };
+  const BUILD = { n: 14, gen: 16, games: 8895, at: "2026-09-12 15:05Z", sha: "4e3ad7a" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1323,6 +1323,8 @@
     }
 
     let winner = null;
+    let danceId = null;
+    let chargeAng = 1.2;
     let t0 = 0;
 
     const simVoronoi = { key: '', map: {} };
@@ -1602,6 +1604,47 @@
       }
     }
 
+    function victorySteer(p, dance, tick) {
+      const mot = motion[p.type] || DEFAULT_MOTION[p.type] || { speed: 1.3 };
+      const cruise = mot.speed * CRUISE_MULT * worldK;
+      const ordered = particles.slice().sort(function (a, b) { return a.id - b.id; });
+      const n = Math.max(1, ordered.length);
+      let idx = 0;
+      for (let i = 0; i < n; i++) if (ordered[i].id === p.id) { idx = i; break; }
+      let cx = 0, cy = 0;
+      for (let i = 0; i < particles.length; i++) { cx += particles[i].x; cy += particles[i].y; }
+      cx /= n; cy /= n;
+      const beat = tick % 18;
+      if (dance === 0) {
+        p.angle = Math.PI;
+        if (beat <= 4) p.speed = cruise * 0.15;
+        else if (beat <= 11) { p.angle = Math.PI + (idx % 2 ? 0.18 : -0.18); p.speed = cruise * 1.25; }
+        else { p.angle = Math.PI; p.speed = cruise * 0.45; }
+      } else if (dance === 1) {
+        p.angle = chargeAng;
+        p.speed = cruise * 1.2;
+      } else if (dance === 2) {
+        const R = 0.28 * Math.min(W, H);
+        const ang = (tick * 0.07) + (2 * Math.PI * idx / n);
+        p.angle = headingTo(p.x, p.y, cx + Math.cos(ang) * R, cy + Math.sin(ang) * R);
+        p.speed = cruise * 1.05;
+      } else if (dance === 3) {
+        p.angle = (idx % 2 === 0) ? (Math.PI * 0.5) : (Math.PI * 1.5);
+        p.speed = cruise * (1.0 + 0.25 * Math.sin(tick * 0.22 + idx * 0.7));
+      } else {
+        const mate = n > 1 ? ordered[idx ^ 1] : p;
+        if (beat < 9) {
+          p.angle = headingTo(p.x, p.y, mate.x, mate.y);
+          p.speed = cruise * 1.15;
+        } else {
+          p.angle = headingTo(p.x, p.y, p.x + (p.x - mate.x), p.y + (p.y - mate.y));
+          p.speed = cruise * 0.7;
+        }
+      }
+      p.vx = Math.sin(p.angle) * p.speed;
+      p.vy = -Math.cos(p.angle) * p.speed;
+    }
+
     /** One simulation tick. move=false during countdown (orient only). */
     function step(move, keepAlive) {
       simVoronoi.tick = (simVoronoi.tick || 0) + 1;
@@ -1611,12 +1654,20 @@
         winner = alive[0] || 'NONE';
       }
       const playAI = move && !winner;
+      if (winner && danceId == null) {
+        const rng = mulberry32((seed + (simVoronoi.tick || 0)) | 0);
+        danceId = (rng() * 5) | 0;
+        chargeAng = rng() * Math.PI * 2;
+        if (opts.onSfx) try { opts.onSfx('win'); } catch (e) {}
+      }
       if (playAI || !move) {
         for (const p of particles) {
           think(p, c);
           p.angle = snapVal(angNorm(p.angle), 1e6);
           p.speed = snapVal(Math.max(0, p.speed), 1e6);
         }
+      } else if (winner && (move || keepAlive)) {
+        for (const p of particles) victorySteer(p, danceId, simVoronoi.tick);
       }
       if (move || keepAlive) {
         for (const p of particles) {

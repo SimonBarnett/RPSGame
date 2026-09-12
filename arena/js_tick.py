@@ -1238,6 +1238,59 @@ def collide(world, allow_convert=True):
                 pass
 
 
+def _cruise_of(p, world_k):
+    mot = DEFAULT_MOTION.get(_tname(p)) or {'speed': 1.3}
+    return float(mot['speed']) * CRUISE_MULT * world_k
+
+
+def victory_steer(p, particles, dance, tick, W, H, world_k, charge_ang):
+    """Winner celebration. dance 0=haka 1=charge 2=ring 3=wave 4=pairs."""
+    cruise = _cruise_of(p, world_k)
+    pid = _pid(p)
+    ordered = sorted(particles, key=_pid)
+    n = max(1, len(ordered))
+    try:
+        idx = next(i for i, q in enumerate(ordered) if _pid(q) == pid)
+    except StopIteration:
+        idx = pid % n
+    cx = sum(q.x for q in particles) / n
+    cy = sum(q.y for q in particles) / n
+    beat = int(tick) % 18
+    if dance == 0:
+        p.angle = math.pi
+        if beat <= 4:
+            p.speed = cruise * 0.15
+        elif beat <= 11:
+            p.angle = math.pi + (0.18 if (idx % 2) else -0.18)
+            p.speed = cruise * 1.25
+        else:
+            p.angle = math.pi
+            p.speed = cruise * 0.45
+    elif dance == 1:
+        p.angle = float(charge_ang)
+        p.speed = cruise * 1.2
+    elif dance == 2:
+        R = 0.28 * min(W, H)
+        ang = ang_norm((tick * 0.07) + (2.0 * math.pi * idx / n))
+        tx = cx + math.cos(ang) * R
+        ty = cy + math.sin(ang) * R
+        p.angle = heading_to(p.x, p.y, tx, ty)
+        p.speed = cruise * 1.05
+    elif dance == 3:
+        p.angle = (math.pi * 0.5) if (idx % 2 == 0) else (math.pi * 1.5)
+        p.speed = cruise * (1.0 + 0.25 * math.sin(tick * 0.22 + idx * 0.7))
+    else:
+        mate = ordered[idx ^ 1] if n > 1 else p
+        if beat < 9:
+            p.angle = heading_to(p.x, p.y, mate.x, mate.y)
+            p.speed = cruise * 1.15
+        else:
+            p.angle = heading_to(p.x, p.y, p.x + (p.x - mate.x), p.y + (p.y - mate.y))
+            p.speed = cruise * 0.7
+    p.vx = math.sin(p.angle) * p.speed
+    p.vy = -math.cos(p.angle) * p.speed
+
+
 def step(world, move=True, keep_alive=False):
     """One JS-identical tick. Mutates world.particles in place."""
     _ensure_state(world)
@@ -1277,11 +1330,22 @@ def step(world, move=True, keep_alive=False):
         world._js_match_over = True
     play_ai = move and not winner
     world._js_tick_i = int(getattr(world, '_js_tick_i', 0) or 0) + 1
+    if winner and getattr(world, '_js_dance', None) is None:
+        from arena.layout import mulberry32
+        seed = int(getattr(world, '_pin_match_seed', 1) or 1)
+        rng = mulberry32((seed + world._js_tick_i) & 0xffffffff)
+        world._js_dance = int(rng() * 5) % 5
+        world._js_charge_ang = rng() * math.pi * 2
     if play_ai or (not move):
         for p in particles:
             think(world, p, counts, W, H, pad, world_k, forts)
             p.angle = _snap(ang_norm(p.angle), 1e6)
             p.speed = _snap(max(0.0, p.speed), 1e6)
+    elif winner and (move or keep_alive):
+        dance = int(getattr(world, '_js_dance', 0) or 0)
+        charge_ang = float(getattr(world, '_js_charge_ang', 1.2) or 1.2)
+        for p in particles:
+            victory_steer(p, particles, dance, world._js_tick_i, W, H, world_k, charge_ang)
     if move or keep_alive:
         for p in particles:
             _ensure_vel(p)
