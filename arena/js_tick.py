@@ -22,10 +22,10 @@ DEFAULT_MOTION = {
 }
 WALL_RESTITUTION = 0.72
 PAIR_RESTITUTION = 0.35
-FRIEND_RESTITUTION = 0.28
+FRIEND_RESTITUTION = 0.55
 PAIR_FRICTION = 0.32
-FRIEND_FRICTION = 0.42
-WALL_FRICTION = 0.40
+FRIEND_FRICTION = 0.06
+WALL_FRICTION = 0.22
 FORT_FRICTION = 0.35
 FORT_RESTITUTION = 0.55
 COLLISION_SPEED_KEEP = 0.5
@@ -289,7 +289,7 @@ def swarm_heading(p, particles, state, prey, fear, w=None):
     fx = fy = 0.0
     sep_w = 2.8 if state == 'CLEAR_HUNT' else (2.2 if state in ('LAST_MAN', 'NEAR_WIPE') else 1.6)
     if n_sep:
-        m = 1.6 if n_sep >= 3 else 1.0
+        m = 2.4 if n_sep >= 4 else (1.8 if n_sep >= 3 else 1.0)
         fx += sx * sep_w * m
         fy += sy * sep_w * m
     prey_obj = getattr(prey, 'obj', prey) if prey is not None else None
@@ -298,7 +298,7 @@ def swarm_heading(p, particles, state, prey, fear, w=None):
     fear_obj = getattr(fear, 'obj', fear) if fear is not None else None
     if isinstance(fear, dict):
         fear_obj = fear.get('obj')
-    if n_coh and prey_obj is None and state not in ('CLEAR_HUNT', 'LAST_MAN'):
+    if n_coh and n_sep < 4 and prey_obj is None and state not in ('CLEAR_HUNT', 'LAST_MAN'):
         fx += ((cx / n_coh) - p.x) * 0.002
         fy += ((cy / n_coh) - p.y) * 0.002
     if fear_obj is not None and state != 'CLEAR_HUNT':
@@ -1096,6 +1096,28 @@ def think(world, p, counts, W, H, pad, world_k, forts):
         p.speed = cruise * 1.35
 
 
+def _unstick_friends(particles):
+    for i in range(len(particles)):
+        p = particles[i]
+        min_d = p.size * 2.15
+        min_d2 = min_d * min_d
+        for j in range(i + 1, len(particles)):
+            q = particles[j]
+            if p.type != q.type:
+                continue
+            dx, dy = p.x - q.x, p.y - q.y
+            d2 = dx * dx + dy * dy
+            if d2 >= min_d2 or d2 < 1e-8:
+                continue
+            d = math.sqrt(d2)
+            push = (min_d - d) * 0.5
+            nx, ny = dx / d, dy / d
+            p.x += nx * push
+            p.y += ny * push
+            q.x -= nx * push
+            q.y -= ny * push
+
+
 def collide(world, allow_convert=True):
     particles = world.particles
     for i in range(len(particles)):
@@ -1109,7 +1131,7 @@ def collide(world, allow_convert=True):
                 continue
             nx, ny = dx / dist, dy / dist
             same = a.type == b.type
-            push = (min_d - dist + SEPARATION_SLOP) * (0.9 if same else 0.55)
+            push = (min_d - dist + SEPARATION_SLOP) * (1.15 if same else 0.55)
             a.x -= nx * push
             a.y -= ny * push
             b.x += nx * push
@@ -1213,6 +1235,7 @@ def step(world, move=True, keep_alive=False):
             p.x = _snap(p.x, 1e4)
             p.y = _snap(p.y, 1e4)
         collide(world, allow_convert=not winner)
+        _unstick_friends(world.particles)
         for p in list(world.particles):
             bounce_wall(p, W, H)
             bounce_fort(p, forts)

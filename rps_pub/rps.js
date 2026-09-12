@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 4, gen: 16, games: 8879, at: "2026-09-12 13:57Z", sha: "154e8c0" };
+  const BUILD = { n: 5, gen: 16, games: 8879, at: "2026-09-12 14:02Z", sha: "23b87ad" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -44,10 +44,10 @@
   };
   const WALL_RESTITUTION = 0.72;
   const PAIR_RESTITUTION = 0.35;
-  const FRIEND_RESTITUTION = 0.28;
+  const FRIEND_RESTITUTION = 0.55;
   const PAIR_FRICTION = 0.32;
-  const FRIEND_FRICTION = 0.42;
-  const WALL_FRICTION = 0.40;
+  const FRIEND_FRICTION = 0.06;
+  const WALL_FRICTION = 0.22;
   const FORT_FRICTION = 0.35;
   const FORT_RESTITUTION = 0.55;
   const COLLISION_SPEED_KEEP = 0.5;
@@ -756,11 +756,14 @@
     }
     let fx = 0, fy = 0;
     const sepW = state === 'CLEAR_HUNT' ? 2.8 : ((state === 'LAST_MAN' || state === 'NEAR_WIPE') ? 2.2 : 1.6);
-    if (nSep) { fx += sx * sepW * (nSep >= 3 ? 1.6 : 1); fy += sy * sepW * (nSep >= 3 ? 1.6 : 1); }
+    if (nSep) {
+      const m = nSep >= 4 ? 2.4 : (nSep >= 3 ? 1.8 : 1);
+      fx += sx * sepW * m; fy += sy * sepW * m;
+    }
     const preyObj = prey && (prey.obj || prey);
     const fearObj = fear && (fear.obj || fear);
     // Hunt > flock. Cohesion is what made colour-ghettos in the screenshots.
-    if (nCoh && !preyObj && state !== 'CLEAR_HUNT' && state !== 'LAST_MAN') {
+    if (nCoh && nSep < 4 && !preyObj && state !== 'CLEAR_HUNT' && state !== 'LAST_MAN') {
       fx += ((cx / nCoh) - p.x) * 0.002;
       fy += ((cy / nCoh) - p.y) * 0.002;
     }
@@ -1258,20 +1261,23 @@
       if (Math.abs(fx) + Math.abs(fy) < 0.08) return null;
       return { h: Math.atan2(fx, -fy), w: corner ? 0.55 : 0.28 };
     }
-    function unstickFriends(p) {
-      const minD = p.size * 2.15;
-      const minD2 = minD * minD;
+    function unstickAll() {
       for (let i = 0; i < particles.length; i++) {
-        const q = particles[i];
-        if (q === p || q.type !== p.type) continue;
-        const dx = p.x - q.x, dy = p.y - q.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 >= minD2 || d2 < 1e-8) continue;
-        const d = Math.sqrt(d2);
-        const push = (minD - d) * 0.5;
-        const nx = dx / d, ny = dy / d;
-        p.x += nx * push; p.y += ny * push;
-        q.x -= nx * push; q.y -= ny * push;
+        const p = particles[i];
+        const minD = p.size * 2.15;
+        const minD2 = minD * minD;
+        for (let j = i + 1; j < particles.length; j++) {
+          const q = particles[j];
+          if (q.type !== p.type) continue;
+          const dx = p.x - q.x, dy = p.y - q.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= minD2 || d2 < 1e-8) continue;
+          const d = Math.sqrt(d2);
+          const push = (minD - d) * 0.5;
+          const nx = dx / d, ny = dy / d;
+          p.x += nx * push; p.y += ny * push;
+          q.x -= nx * push; q.y -= ny * push;
+        }
       }
     }
     function bounceFort(p) {
@@ -1544,7 +1550,7 @@
           const minD = a.size + b.size;
           if (dist >= minD || dist < 1e-8) continue;
           const nx = dx / dist, ny = dy / dist;
-          const push = (minD - dist + SEPARATION_SLOP) * (a.type === b.type ? 0.9 : 0.55);
+          const push = (minD - dist + SEPARATION_SLOP) * (a.type === b.type ? 1.15 : 0.55);
           a.x -= nx * push; a.y -= ny * push;
           b.x += nx * push; b.y += ny * push;
           if (a.type === b.type) {
@@ -1606,6 +1612,7 @@
           p.y = snapVal(p.y, 1e4);
         }
         collide(!winner);
+        unstickAll();
         for (const p of particles) {
           bounceWall(p); bounceFort(p);
           p.x = Math.max(p.size + 2, Math.min(W - p.size - 2, p.x));
@@ -2097,21 +2104,10 @@
       phaseAt = performance.now();
     }
 
-    canvas.addEventListener('pointerdown', function (ev) {
-      const r = canvas.getBoundingClientRect();
-      const x = ev.clientX - r.left, y = ev.clientY - r.top;
-      const hudHit = x > fit.w - (fit.w < 520 ? 70 : 130) && y < (fit.w < 520 ? 120 : 230);
-      if (!audioOn) {
-        audioOn = true;
-        sfx.on = true;
-        sfx.prime();
-        return;
-      }
-      sfx.prime();
-      if (hudHit) {
-        audioOn = false;
-        sfx.on = false;
-      }
+    canvas.addEventListener('pointerdown', function () {
+      audioOn = !audioOn;
+      sfx.on = audioOn;
+      if (audioOn) sfx.prime();
     });
 
     function loop(now) {
