@@ -16,9 +16,9 @@ FEAR_N = {'ROCK': 'PAPER', 'PAPER': 'SCISSORS', 'SCISSORS': 'ROCK'}
 CRUISE_MULT = 5.5
 LAST_MAN_FEAR_SPEED = 1.25
 DEFAULT_MOTION = {
-    'ROCK': {'speed': 1.3025, 'turn': 16.2000},
-    'PAPER': {'speed': 2.0000, 'turn': 13.8000},
-    'SCISSORS': {'speed': 1.3825, 'turn': 14.1500},
+    'ROCK': {'speed': 1.4200, 'turn': 16.2000},
+    'PAPER': {'speed': 1.9896, 'turn': 13.7375},
+    'SCISSORS': {'speed': 1.5000, 'turn': 14.1500},
 }
 WALL_RESTITUTION = 0.92
 PAIR_RESTITUTION = 0.35
@@ -774,8 +774,9 @@ def safest_prey(p, preys, fears):
             if d < fd:
                 fd = d
         s = fd - 0.45 * pd
-        if fd < sz * 5.5:
-            s -= 80.0
+        iso = 6.5 if _tname(p) == 'PAPER' else 5.5
+        if fd < sz * iso:
+            s -= 100.0 if _tname(p) == 'PAPER' else 80.0
         if s > best_s:
             best_s, best = s, prey
     if best is None:
@@ -1286,7 +1287,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             and state != 'NEAR_WIPE'):
         kite = _kite_prey_away_from_fear(
             p, prey['obj'], fear['obj'],
-            loose=(_tname(p) == 'PAPER' and fear_n >= 1))
+            loose=(tn == 'PAPER' and fear_n >= 1))
         if kite is not None:
             want = kite
             mode = 'chase'
@@ -1366,7 +1367,7 @@ def _unstick_friends(particles):
 def collide(world, allow_convert=True):
     particles = world.particles
     types_alive = len({_tname(p) for p in particles})
-    eat_cd = 4 if types_alive <= 2 else 8
+    eat_cd = 4 if types_alive <= 2 else 11
     for p in particles:
         cd = int(getattr(p, '_eat_cd', 0) or 0)
         if cd > 0:

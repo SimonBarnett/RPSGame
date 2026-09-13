@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 31, gen: 84, games: 9525, at: "2026-09-13 14:17Z", sha: "4935979" };
+  const BUILD = { n: 32, gen: 106, games: 9589, at: "2026-09-13 14:38Z", sha: "beba170" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -26,9 +26,9 @@
     SCISSORS: [70, 178, 230]
   };
   const DEFAULT_MOTION = {
-    ROCK: { speed: 1.3025, turn: 16.2000 },
-    PAPER: { speed: 2.0000, turn: 13.8000 },
-    SCISSORS: { speed: 1.3825, turn: 14.1500 }
+    ROCK: { speed: 1.4200, turn: 16.2000 },
+    PAPER: { speed: 1.9896, turn: 13.7375 },
+    SCISSORS: { speed: 1.5000, turn: 14.1500 }
   };
   const CRUISE_MULT = 5.5;
   const LAST_MAN_FEAR_SPEED = 1.25;
@@ -1351,7 +1351,8 @@
           if (d < fd) fd = d;
         }
         let s = fd - 0.45 * pd;
-        if (fd < sz * 5.5) s -= 80;
+        const iso = p.type === 'PAPER' ? 6.5 : 5.5;
+        if (fd < sz * iso) s -= (p.type === 'PAPER' ? 100 : 80);
         if (s > bestS) { bestS = s; best = prey; }
       }
       return best ? { obj: best, d: Math.hypot(p.x - best.x, p.y - best.y) } : null;
@@ -1633,7 +1634,7 @@
       if (allowConvert == null) allowConvert = true;
       const cNow = counts();
       const typesAlive = (cNow.ROCK > 0 ? 1 : 0) + (cNow.PAPER > 0 ? 1 : 0) + (cNow.SCISSORS > 0 ? 1 : 0);
-      const eatCd = typesAlive <= 2 ? 4 : 8;
+      const eatCd = typesAlive <= 2 ? 4 : 11;
       for (let k = 0; k < particles.length; k++) {
         if (particles[k]._eat_cd > 0) particles[k]._eat_cd--;
       }
