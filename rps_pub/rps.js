@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 52, gen: 524, games: 10567, at: "2026-09-13 22:33Z", sha: "8b89408" };
+  const BUILD = { n: 53, gen: 553, games: 10634, at: "2026-09-13 23:06Z", sha: "ab956ad" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1732,8 +1732,8 @@
       const dNear = Math.sqrt(bestD2);
       const dPack = Math.hypot(p.x - cx, p.y - cy);
       const ram = function (h) {
-        if (dPack < packR + p.size * 10 && Math.abs(angDiff(h, packH)) < 1.00) return true;
-        if (dNear < p.size * 8 && Math.abs(angDiff(h, nearH)) < 0.90) return true;
+        if (dPack < packR + p.size * 6 && Math.abs(angDiff(h, packH)) < 0.55) return true;
+        if (dNear < p.size * 5 && Math.abs(angDiff(h, nearH)) < 0.50) return true;
         return false;
       };
       if (!prey) {
@@ -1749,15 +1749,21 @@
       let px = -(cy - p.y), py = cx - p.x;
       if (px * (gx - p.x) + py * (gy - p.y) < 0) { px = -px; py = -py; }
       const pl = Math.hypot(px, py) || 1;
+      const along = packR + p.size * 6;
       const clear = packR + p.size * 8;
-      const side = headingTo(p.x, p.y, cx + px / pl * clear, cy + py / pl * clear);
-      if (!ram(side)) return side;
+      const wrap = headingTo(
+        p.x, p.y,
+        cx + px / pl * clear + fx / fl * along,
+        cy + py / pl * clear + fy / fl * along
+      );
+      if (!ram(wrap)) return wrap;
       const minOff = Math.max(1.15, Math.atan2(packR + p.size * 6, Math.max(dPack, p.size)));
       const left = angNorm(packH + minOff);
       const right = angNorm(packH - minOff);
       const h = Math.abs(angDiff(left, toGoal)) <= Math.abs(angDiff(right, toGoal)) ? left : right;
       if (!ram(h)) return h;
-      return angNorm(nearH + Math.PI);
+      if (dNear < p.size * 3.5) return angNorm(nearH + Math.PI);
+      return wrap;
     }
 
     function avoidFearOverlap(p, want) {

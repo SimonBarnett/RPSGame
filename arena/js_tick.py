@@ -577,7 +577,7 @@ def _fear_clump_steer(p, particles, prey_t, want):
 
 
 def _paper_never_into_scissors(p, want, fear_pool, prey=None):
-    """Paper last-heading veto: never ram the pack; hunt beside it to far-side of Rock."""
+    """Paper last-heading veto: never ram the pack; wrap around it to far-side of Rock."""
     if want is None or _tname(p) != 'PAPER':
         return want
     best, best_d2 = None, 1e18
@@ -614,9 +614,10 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     d_pack = math.hypot(p.x - cx, p.y - cy)
 
     def _ram(h):
-        if d_pack < pack_r + p.size * 10.0 and abs(ang_diff(h, pack_h)) < 1.00:
+        # Direct-into-pack only. Wrap (~90°) stays legal; not a 60° per-Scissors cone.
+        if d_pack < pack_r + p.size * 6.0 and abs(ang_diff(h, pack_h)) < 0.55:
             return True
-        if d_near < p.size * 8.0 and abs(ang_diff(h, near_h)) < 0.90:
+        if d_near < p.size * 5.0 and abs(ang_diff(h, near_h)) < 0.50:
             return True
         return False
 
@@ -635,17 +636,23 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     if px * (gx - p.x) + py * (gy - p.y) < 0:
         px, py = -px, -py
     pl = math.hypot(px, py) or 1.0
+    along = pack_r + p.size * 6.0
     clear = pack_r + p.size * 8.0
-    side = heading_to(p.x, p.y, cx + px / pl * clear, cy + py / pl * clear)
-    if not _ram(side):
-        return side
+    wrap = heading_to(
+        p.x, p.y,
+        cx + px / pl * clear + fx / fl * along,
+        cy + py / pl * clear + fy / fl * along)
+    if not _ram(wrap):
+        return wrap
     min_off = max(1.15, math.atan2(pack_r + p.size * 6.0, max(d_pack, p.size)))
     left = ang_norm(pack_h + min_off)
     right = ang_norm(pack_h - min_off)
     h = left if abs(ang_diff(left, to_goal)) <= abs(ang_diff(right, to_goal)) else right
     if not _ram(h):
         return h
-    return ang_norm(near_h + math.pi)
+    if d_near < p.size * 3.5:
+        return ang_norm(near_h + math.pi)
+    return wrap
 
 
 def _avoid_fear_overlap(p, want, fear_pool):
