@@ -7,7 +7,8 @@
     "states": [
       "CONTESTED"
     ],
-    "priority": 55
+    "priority": 55,
+    "min_self": 4
   },
   "tactics": [
     "pincer_flank",

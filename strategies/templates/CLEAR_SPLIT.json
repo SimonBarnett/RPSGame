@@ -7,7 +7,8 @@
     "states": [
       "CLEAR_HUNT"
     ],
-    "priority": 100
+    "priority": 100,
+    "min_self": 4
   },
   "tactics": [
     "voronoi_split",

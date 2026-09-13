@@ -93,6 +93,7 @@ def _disk_overlay(ov, for_js=False):
     out = dict(ov)
     out.pop('last_changes', None)
     if for_js:
+        out['when'] = _apply_when_floors(out.get('id'), out.get('when'))
         st = dict(out.get('stats') or {})
         bys = {}
         for k, v in (st.get('by_state') or {}).items():
@@ -198,6 +199,14 @@ def merge_template(overlay, template):
         ow['priority'] = tw['priority']
     elif 'priority' not in ow:
         ow['priority'] = 50
+    sid = tmpl.get('id') or out.get('id')
+    for k in WHEN_GATES:
+        if k in tw:
+            try:
+                ow[k] = int(tw[k]) if k not in ow else max(int(ow[k]), int(tw[k]))
+            except Exception:
+                ow[k] = tw[k]
+    ow = _apply_when_floors(sid, ow)
     out['when'] = ow
     ot = list(out.get('tactics') or [])
     for tid in tmpl.get('tactics') or []:
@@ -377,6 +386,7 @@ def spec_for(type_name, strategy_id):
     tmpl = STRATEGIES.get(strategy_id) or {}
     ov = (TEAM_OVERLAYS.get(type_name) or {}).get(strategy_id) or {}
     out = _merge(tmpl, ov)
+    out['when'] = _apply_when_floors(strategy_id, out.get('when'))
     _SPEC_CACHE[key] = out
     return out
 
@@ -460,6 +470,70 @@ ENDGAME_STATES = frozenset({
 })
 
 
+WHEN_FLOORS = {
+    'PACK_HUNT': {'min_self': 4},
+    'CHOKE_PINCH': {'min_self': 4},
+    'CLEAR_SPLIT': {'min_self': 4},
+    'SCREEN_HUNT': {'min_self': 3},
+}
+WHEN_GATES = ('min_self', 'max_self', 'min_fear', 'max_fear',
+              'min_prey', 'max_prey', 'min_team', 'max_team')
+
+
+def _apply_when_floors(sid, when):
+    out = dict(when or {})
+    fl = WHEN_FLOORS.get(sid) or {}
+    for k, v in fl.items():
+        try:
+            cur = int(out[k]) if k in out else v
+        except Exception:
+            cur = v
+        out[k] = max(int(v), int(cur))
+    return out
+
+
+def _when_allows(when, ctx):
+    """Numeric when.* gates on remaining counts / spawn team. Missing = allow."""
+    if not when or not ctx:
+        return True
+    def _iv(key):
+        if key not in when:
+            return None
+        try:
+            return int(when[key])
+        except Exception:
+            return None
+    self_n = ctx.get('self_n')
+    fear_n = ctx.get('fear_n')
+    prey_n = ctx.get('prey_n')
+    team = ctx.get('team')
+    lo = _iv('min_self')
+    if lo is not None and self_n is not None and int(self_n) < lo:
+        return False
+    hi = _iv('max_self')
+    if hi is not None and self_n is not None and int(self_n) > hi:
+        return False
+    lo = _iv('min_fear')
+    if lo is not None and fear_n is not None and int(fear_n) < lo:
+        return False
+    hi = _iv('max_fear')
+    if hi is not None and fear_n is not None and int(fear_n) > hi:
+        return False
+    lo = _iv('min_prey')
+    if lo is not None and prey_n is not None and int(prey_n) < lo:
+        return False
+    hi = _iv('max_prey')
+    if hi is not None and prey_n is not None and int(prey_n) > hi:
+        return False
+    lo = _iv('min_team')
+    if lo is not None and team is not None and int(team) < lo:
+        return False
+    hi = _iv('max_team')
+    if hi is not None and team is not None and int(team) > hi:
+        return False
+    return True
+
+
 def match_state(self_n, fear_n, prey_n):
     """Same order as rps.js gameState. Play-only; learning does not change this."""
     self_n = int(self_n or 0)
@@ -489,8 +563,8 @@ def match_state(self_n, fear_n, prey_n):
     return 'CONTESTED'
 
 
-def _legal_ids(type_name, state):
-    """Same legal set as rps.js legalFromJson: when.states, meta banned, meta force."""
+def _legal_ids(type_name, state, ctx=None):
+    """Same legal set as rps.js legalFromJson: when.states, count gates, meta."""
     if not STRATEGY_IDS:
         reload()
     ban = _banned(type_name)
@@ -502,47 +576,61 @@ def _legal_ids(type_name, state):
             continue
         if sid in ban:
             continue
-        states = (spec.get('when') or {}).get('states') or []
-        if state in states:
-            legal.append(sid)
+        when = spec.get('when') or {}
+        states = when.get('states') or []
+        if state not in states:
+            continue
+        if not _when_allows(when, ctx):
+            continue
+        legal.append(sid)
     try:
         forced_ids = list(_meta_force(type_name, state) or ())
     except Exception:
         forced_ids = []
     if forced_ids:
         forced = [s for s in forced_ids if s in bag and s not in ban]
+        if ctx:
+            forced = [s for s in forced if _when_allows(
+                (spec_for(type_name, s) if type_name else {}).get('when'), ctx)]
         if forced:
             legal = forced
     if not legal:
         pool = CARD_FOR_STATE.get(str(state or ''), CARD_FOR_STATE['CONTESTED'])
         legal = [s for s in pool if (s in bag or s in (STRATEGIES or {})) and s not in ban]
+        if ctx:
+            legal = [s for s in legal if _when_allows(
+                spec_for(type_name or 'ROCK', s).get('when'), ctx)]
     if str(state) == 'LAST_PREY_RISK':
         care = CARD_FOR_STATE.get('LAST_PREY_RISK') or []
         legal = [s for s in legal if s in care]
         if not legal:
             legal = [s for s in care if (s in bag or s in (STRATEGIES or {})) and s not in ban]
+            if ctx:
+                legal = [s for s in legal if _when_allows(
+                    spec_for(type_name or 'ROCK', s).get('when'), ctx)]
     return legal
 
 
 def _card_mean(type_name, strategy_id, state=None):
-    """Greedy posterior mean. Same formula as rps.js cardMean (no Thompson)."""
+    """Greedy mean for THIS state only. Cold start 0.33 — never global αβ."""
     st = ((TEAM_OVERLAYS.get(type_name) or {}).get(strategy_id) or {}).get('stats') or {}
-    slot = {}
-    if state:
-        slot = ((st.get('by_state') or {}).get(state) or {})
+    if not state:
+        return 0.33
+    slot = ((st.get('by_state') or {}).get(state) or {})
     try:
-        a = float(slot.get('alpha', st.get('alpha', 1.0)) or 1.0)
-        b = float(slot.get('beta', st.get('beta', 1.0)) or 1.0)
+        n = float(slot.get('n') or 0)
+        a = float(slot.get('alpha') or 0)
+        b = float(slot.get('beta') or 0)
     except Exception:
         return 0.33
-    if a + b <= 0:
+    if n < 8 or a + b <= 0:
         return 0.33
     return a / (a + b)
 
 
-def pick_card(type_name, state):
+def pick_card(type_name, state, ctx=None):
     """Play-only greedy pick. Learning updates JSON after the match, not here."""
-    legal = _legal_ids(type_name, state)
+    legal = _legal_ids(type_name, state, ctx)
     if not legal:
         pool = CARD_FOR_STATE.get(str(state or ''), CARD_FOR_STATE['CONTESTED'])
         return pool[0]
@@ -729,13 +817,13 @@ def endgame_switch(type_name, game_state, current=None, fear=0, prey=0,
     return None
 
 
-def select(type_name, game_state, current=None, hold_frames=0, opponent=None):
+def select(type_name, game_state, current=None, hold_frames=0, opponent=None, ctx=None):
     """Same as rps.js pickCardHold. Returns (strategy_id, new_hold_frames, switched)."""
     if not STRATEGY_IDS:
         reload()
     state = str(game_state or 'CONTESTED')
-    desired = pick_card(type_name, state)
-    legal = _legal_ids(type_name, state)
+    desired = pick_card(type_name, state, ctx)
+    legal = _legal_ids(type_name, state, ctx)
     if current in _banned(type_name):
         return desired, 0, True
     if state in ENDGAME_STATES and current != desired:

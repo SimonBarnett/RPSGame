@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 36, gen: 321, games: 10027, at: "2026-09-13 17:35Z", sha: "5232cf2" };
+  const BUILD = { n: 37, gen: 331, games: 10049, at: "2026-09-13 17:48Z", sha: "5cb2be7" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -459,14 +459,36 @@
 
   function cardMean(spec, state) {
     const st = (spec && spec.stats) || {};
-    const slot = ((st.by_state || {})[state]) || {};
-    const a = +(slot.alpha != null ? slot.alpha : (st.alpha != null ? st.alpha : 1));
-    const b = +(slot.beta != null ? slot.beta : (st.beta != null ? st.beta : 1));
-    if (!isFinite(a) || !isFinite(b) || a + b <= 0) return 0.33;
+    const slot = (st.by_state || {})[state];
+    if (!slot) return 0.33;
+    const n = +(slot.n != null ? slot.n : 0);
+    const a = +(slot.alpha != null ? slot.alpha : 0);
+    const b = +(slot.beta != null ? slot.beta : 0);
+    if (!isFinite(n) || n < 8 || !isFinite(a) || !isFinite(b) || a + b <= 0) return 0.33;
     return a / (a + b);
   }
 
-  function legalFromJson(book, state) {
+  function whenAllows(when, ctx) {
+    if (!when || !ctx) return true;
+    function iv(k) {
+      if (when[k] == null) return null;
+      const v = +when[k];
+      return isFinite(v) ? v : null;
+    }
+    const selfN = ctx.selfN, fearN = ctx.fearN, preyN = ctx.preyN, team = ctx.team;
+    let lo, hi;
+    lo = iv('min_self'); if (lo != null && selfN != null && selfN < lo) return false;
+    hi = iv('max_self'); if (hi != null && selfN != null && selfN > hi) return false;
+    lo = iv('min_fear'); if (lo != null && fearN != null && fearN < lo) return false;
+    hi = iv('max_fear'); if (hi != null && fearN != null && fearN > hi) return false;
+    lo = iv('min_prey'); if (lo != null && preyN != null && preyN < lo) return false;
+    hi = iv('max_prey'); if (hi != null && preyN != null && preyN > hi) return false;
+    lo = iv('min_team'); if (lo != null && team != null && team < lo) return false;
+    hi = iv('max_team'); if (hi != null && team != null && team > hi) return false;
+    return true;
+  }
+
+  function legalFromJson(book, state, ctx) {
     const cards = (book && book.cards) || {};
     const type = (book && book.type) || '';
     const meta = (book && book.meta) || {};
@@ -481,20 +503,22 @@
       if (spec.enabled === false) continue;
       if (banned.indexOf(id) >= 0) continue;
       const states = (spec.when && spec.when.states) || [];
-      if (states.indexOf(state) >= 0) legal.push(id);
+      if (states.indexOf(state) < 0) continue;
+      if (!whenAllows(spec.when, ctx)) continue;
+      legal.push(id);
     }
     if (force.length) {
       const forced = [];
       for (let i = 0; i < force.length; i++) {
         const id = force[i];
-        if (cards[id] && banned.indexOf(id) < 0) forced.push(id);
+        if (cards[id] && banned.indexOf(id) < 0 && whenAllows((cards[id] || {}).when, ctx)) forced.push(id);
       }
       if (forced.length) legal = forced;
     }
     if (!legal.length) {
       const pool = CARD_FOR_STATE[state] || CARD_FOR_STATE.CONTESTED;
       for (let i = 0; i < pool.length; i++) {
-        if (cards[pool[i]] && banned.indexOf(pool[i]) < 0) legal.push(pool[i]);
+        if (cards[pool[i]] && banned.indexOf(pool[i]) < 0 && whenAllows((cards[pool[i]] || {}).when, ctx)) legal.push(pool[i]);
       }
     }
     if (state === 'LAST_PREY_RISK') {
@@ -532,8 +556,8 @@
     HASH_MELEE: { movement: [{fn:'hash.heading',blend:0.7},{fn:'boids.desired_heading',blend:0.25}] },
     LOS_SPRING: { movement: [{fn:'cover.clear',blend:0.7},{fn:'cover.cover_heading',blend:0.35}] }
   };
-  function pickCard(book, state) {
-    const legal = legalFromJson(book, state);
+  function pickCard(book, state, ctx) {
+    const legal = legalFromJson(book, state, ctx);
     if (!legal.length) {
       const pool = CARD_FOR_STATE[state] || CARD_FOR_STATE.CONTESTED;
       return pool[0];
@@ -550,8 +574,8 @@
     return best;
   }
   /** Playbook hold-frame hysteresis per type. */
-  function pickCardHold(teamHold, type, book, state) {
-    const desired = pickCard(book, state);
+  function pickCardHold(teamHold, type, book, state, ctx) {
+    const desired = pickCard(book, state, ctx);
     const spec = book && book.cards && book.cards[desired];
     const holdNeed = Math.max(1, intish((spec && spec.switch && spec.switch.hold_frames) || 8));
     const margin = floatish((spec && spec.switch && spec.switch.margin) || 1.0);
@@ -564,7 +588,7 @@
       teamHold[type] = { card: desired, frames: 0 };
       return desired;
     }
-    const legal = legalFromJson(book, state);
+    const legal = legalFromJson(book, state, ctx);
     if (legal.indexOf(slot.card) < 0) {
       teamHold[type] = { card: desired, frames: 0 };
       return desired;
@@ -1404,7 +1428,9 @@
       const fearN = c[FEAR[p.type]] || 0;
       const state = gameState(c, p.type, lastPreyMax);
       const book = books[p.type] || { cards: {} };
-      p.card = pickCardHold(teamHold, p.type, book, state);
+      p.card = pickCardHold(teamHold, p.type, book, state, {
+        selfN: selfN, fearN: fearN, preyN: preyN, team: teamSize
+      });
       p.state = state;
       const preyT = PREY[p.type], fearT = FEAR[p.type];
       const fear = nearest(p, fearT);

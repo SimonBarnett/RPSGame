@@ -288,19 +288,27 @@ def apply_vector(overlay, vec, tunables):
     return overlay
 
 
-def payoff(overlay, type_name=None, sid=None):
-    """Same hill as the playbook writer: bounded decision score − blunder rate."""
+def payoff(overlay, type_name=None, sid=None, state=None):
+    """Decision score for one game state — never pooled global αβ."""
     st = (overlay or {}).get('stats') or {}
-    games = max(1.0, float(st.get('games') or 1.0))
+    bys = st.get('by_state') or {}
+    slot = {}
+    if state and state in bys:
+        slot = bys.get(state) or {}
+    elif bys:
+        slot = max(bys.values(), key=lambda v: float((v or {}).get('n') or 0)) if bys else {}
+        if not isinstance(slot, dict):
+            slot = {}
+        if float(slot.get('n') or 0) < 8:
+            slot = {}
+    games = max(1.0, float(slot.get('n') or st.get('games') or 1.0))
     bl = min(1.0, float(st.get('last_prey_blunder') or 0.0) / games)
-    t = type_name or (overlay or {}).get('type')
-    s = sid or (overlay or {}).get('id')
-    if t and s:
-        try:
-            from strategies.playbook import strategy_decision_score
-            return float(strategy_decision_score(t, s)) - 0.40 * bl
-        except Exception:
-            pass
+    if slot:
+        a = float(slot.get('alpha') or 1.0)
+        b = float(slot.get('beta') or 1.0)
+        th = a / max(1e-6, a + b)
+        ema = float(slot.get('ema') or 0.0)
+        return 0.50 * th + 0.30 * ema - 3.2 * bl
     a = float(st.get('alpha') or 1.0)
     b = float(st.get('beta') or 1.0)
     th = a / max(1e-6, a + b)

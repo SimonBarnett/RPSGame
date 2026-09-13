@@ -1059,8 +1059,13 @@ def _team_ai(world, tn, counts):
     fear_n = counts.get(FEAR_N[tn], 0)
     state = playbook.match_state(self_n, fear_n, prey_n)
     slot = world._js_hold[tn]
+    ctx = {
+        'self_n': self_n, 'fear_n': fear_n, 'prey_n': prey_n,
+        'team': getattr(world, 'teamSize', None),
+    }
     sid, frames, _ = playbook.select(
-        tn, state, current=slot.get('card'), hold_frames=slot.get('frames') or 0)
+        tn, state, current=slot.get('card'), hold_frames=slot.get('frames') or 0,
+        ctx=ctx)
     slot['card'] = sid
     slot['frames'] = frames
     spec = _spec(tn, sid)
