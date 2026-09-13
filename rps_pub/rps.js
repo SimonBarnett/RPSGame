@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 47, gen: 462, games: 10392, at: "2026-09-13 20:47Z", sha: "86a1784" };
+  const BUILD = { n: 48, gen: 465, games: 10401, at: "2026-09-13 20:52Z", sha: "a5c1a1d" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1644,6 +1644,7 @@
       }
 
       want = paperNeverIntoScissors(p, want, prey && prey.obj);
+      want = avoidFearOverlap(p, want);
       if (want != null) {
         const dlt = angDiff(p.angle, want);
         p.angle = angNorm(p.angle + Math.max(-maxTurn, Math.min(maxTurn, dlt)));
@@ -1727,6 +1728,26 @@
         return angNorm(fearH + sign * (Math.PI * 0.5));
       }
       return want;
+    }
+
+    function avoidFearOverlap(p, want) {
+      if (want == null) return want;
+      const fearT = FEAR[p.type];
+      if (!fearT) return want;
+      const step = Math.max(p.speed || 0, p.size * 1.1);
+      const nx = p.x + Math.sin(want) * step;
+      const ny = p.y - Math.cos(want) * step;
+      let hit = null;
+      for (let i = 0; i < particles.length; i++) {
+        const q = particles[i];
+        if (q === p || q.type !== fearT) continue;
+        const need = p.size + q.size + 2;
+        if (Math.hypot(nx - q.x, ny - q.y) < need) { hit = q; break; }
+      }
+      if (!hit) return want;
+      const fearH = headingTo(p.x, p.y, hit.x, hit.y);
+      const sign = (p.id % 2) ? 1 : -1;
+      return angNorm(fearH + sign * (Math.PI * 0.5));
     }
 
     function kitePreyAwayFromFear(p, prey, fear, loose) {

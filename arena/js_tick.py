@@ -607,6 +607,28 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     return want
 
 
+def _avoid_fear_overlap(p, want, fear_pool):
+    """Do not steer into next-step overlap with a predator. Strike still converts."""
+    if want is None or not fear_pool:
+        return want
+    step = max(float(getattr(p, 'speed', 0) or 0), p.size * 1.1)
+    nx = p.x + math.sin(want) * step
+    ny = p.y - math.cos(want) * step
+    hit = None
+    for q in fear_pool:
+        if q is p:
+            continue
+        need = p.size + q.size + 2.0
+        if math.hypot(nx - q.x, ny - q.y) < need:
+            hit = q
+            break
+    if hit is None:
+        return want
+    fear_h = heading_to(p.x, p.y, hit.x, hit.y)
+    sign = 1.0 if (_pid(p) % 2) else -1.0
+    return ang_norm(fear_h + sign * (math.pi * 0.5))
+
+
 def _kite_prey_away_from_fear(p, prey, fear, loose=False):
     """If predator sits on the path to prey, go around — never through."""
     if prey is None or fear is None:
@@ -1378,6 +1400,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             want = blend_headings(blend_headings(want, tang, ww), out, 0.28)
     prey_obj = prey['obj'] if prey and prey.get('obj') is not None else None
     want = _paper_never_into_scissors(p, want, fear_pool, prey_obj)
+    want = _avoid_fear_overlap(p, want, fear_pool)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
