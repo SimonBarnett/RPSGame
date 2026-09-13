@@ -58,14 +58,25 @@ class Metrics:
         return max(0, n)
 
     @classmethod
-    def write_games_total(cls, n):
+    def _atomic_write_int(cls, path, n):
         n = max(0, int(n))
+        text = str(n) + '\n'
+        tmp = path + '.tmp'
         try:
-            with open(cls.TOTAL_FILE, 'w', encoding='utf-8') as f:
-                f.write(str(n) + '\n')
+            with open(tmp, 'w', encoding='utf-8') as f:
+                f.write(text)
+            os.replace(tmp, path)
         except Exception:
-            pass
+            try:
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(text)
+            except Exception:
+                pass
         return n
+
+    @classmethod
+    def write_games_total(cls, n):
+        return cls._atomic_write_int(cls.TOTAL_FILE, n)
 
     @classmethod
     def bump_games_total(cls):
@@ -84,13 +95,35 @@ class Metrics:
 
     @classmethod
     def write_generation(cls, n):
-        n = max(0, int(n))
+        return cls._atomic_write_int(cls.GEN_FILE, n)
+
+    @classmethod
+    def bump_generation(cls):
+        """Disk is source of truth so a new process cannot reset GEN to 0."""
+        return cls.write_generation(cls.read_generation() + 1)
+
+    @classmethod
+    def ensure_learn_counters(cls, gen_before, games_before, optimizer=None):
+        """After a finished /learn game: GEN and GAMES must rise, then stamp BUILD."""
+        if cls.read_games_total() <= int(games_before or 0):
+            cls.bump_games_total()
+        if cls.read_generation() <= int(gen_before or 0):
+            cls.bump_generation()
+        gen = cls.read_generation()
+        games = cls.read_games_total()
+        if optimizer is not None:
+            try:
+                from optimizer.engine import StrategyOptimizer
+                StrategyOptimizer.GENERATION = gen
+                optimizer.games_seen = games
+            except Exception:
+                pass
         try:
-            with open(cls.GEN_FILE, 'w', encoding='utf-8') as f:
-                f.write(str(n) + '\n')
-        except Exception:
-            pass
-        return n
+            from tools.bump_build import write_counters
+            write_counters(gen=gen, games=games, bump_build=False)
+        except Exception as e:
+            print('stamp counters', e, flush=True)
+        return gen, games
 
     @staticmethod
     def _safe_append(path, text_line):

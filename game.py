@@ -131,6 +131,9 @@ def learn(n=None):
             pass
         print('game %02d  frames=%d  %.2fs  team=%d  forts=%d  winner=%s  left=%s' % (
             i, frames, time.time() - g0, w.teamSize, w.forts, winner, counts), flush=True)
+        from optimizer.logger import Metrics
+        gen0 = Metrics.read_generation()
+        games0 = Metrics.read_games_total()
         log_winner = pending
         if log_winner is None and (not timed_out) and w.particles:
             log_winner = w.particles[0].type
@@ -142,19 +145,19 @@ def learn(n=None):
         w._pending_gameover_type = None
         try:
             w.optimizer.optimise(persist=True)
-            print('  learn gen=%s games=%s changes=%d' % (
-                getattr(w.optimizer, 'GENERATION', '?'),
-                getattr(w.optimizer, 'games_seen', '?'),
-                len(getattr(w.optimizer, 'last_changes', []) or [])), flush=True)
         except Exception as e:
             print('  optimise', e, flush=True)
+        gen, games = Metrics.ensure_learn_counters(gen0, games0, w.optimizer)
+        print('  learn gen=%s games=%s changes=%d' % (
+            gen, games,
+            len(getattr(w.optimizer, 'last_changes', []) or [])), flush=True)
     except KeyboardInterrupt:
         print('\nstopped after %d games' % i, flush=True)
     try:
         from optimizer.logger import Metrics
         from tools.bump_build import write_counters
         write_counters(
-            gen=int(getattr(w.optimizer, 'GENERATION', 0) or 0),
+            gen=int(Metrics.read_generation() or 0),
             games=int(Metrics.read_games_total() or 0),
             bump_build=False)
     except Exception as e:

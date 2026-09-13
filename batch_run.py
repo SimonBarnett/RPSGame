@@ -64,6 +64,9 @@ for i in range(N):
     sim_s = time.time() - g0
     print('game %02d  frames=%d  %.2fs  team=%d  forts=%d  winner=%s  left=%s' % (
         i + 1, frames, sim_s, w.teamSize, w.forts, winner, counts))
+    from optimizer.logger import Metrics
+    gen0 = Metrics.read_generation()
+    games0 = Metrics.read_games_total()
     pending = getattr(w, '_pending_gameover_type', None)
     if pending is not None and hasattr(w, 'metrics'):
         try:
@@ -72,16 +75,22 @@ for i in range(N):
             print('  log_gameover %.2fs' % (time.time() - tlog))
         except Exception as e:
             print('log_gameover', e)
+    elif hasattr(w, 'metrics'):
+        try:
+            w.metrics.log_gameover(w.particles[0].type if w.particles else None)
+        except Exception as e:
+            print('log_gameover', e)
     w._pending_gameover_type = None
     l0 = time.time()
     try:
         print('  learn start')
         w.optimizer.optimise(persist=True)
-        print('  learn gen=%s changes=%d  %.2fs' % (
-            getattr(w.optimizer, 'GENERATION', '?'),
-            len(getattr(w.optimizer, 'last_changes', []) or []),
-            time.time() - l0))
     except Exception as e:
         print('  optimise', e)
+    gen, games = Metrics.ensure_learn_counters(gen0, games0, w.optimizer)
+    print('  learn gen=%s games=%s changes=%d  %.2fs' % (
+        gen, games,
+        len(getattr(w.optimizer, 'last_changes', []) or []),
+        time.time() - l0))
 dt = time.time() - t0
 print('done in %.1fs  (%.2fs/game)  wins=%s' % (dt, dt / max(1, N), wins))

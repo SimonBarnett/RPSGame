@@ -2169,12 +2169,11 @@ class StrategyOptimizer:
         if recent_only is None:
             recent_only = self.SAMPLE_WINDOW
         self.last_changes = []
-        StrategyOptimizer.GENERATION += 1
         try:
             from optimizer.logger import Metrics
-            Metrics.write_generation(StrategyOptimizer.GENERATION)
+            StrategyOptimizer.GENERATION = Metrics.bump_generation()
         except Exception:
-            pass
+            StrategyOptimizer.GENERATION = int(getattr(StrategyOptimizer, 'GENERATION', 0) or 0) + 1
         games = []
         try:
             games = self._load_games()
