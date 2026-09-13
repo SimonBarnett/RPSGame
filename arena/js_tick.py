@@ -576,6 +576,37 @@ def _fear_clump_steer(p, particles, prey_t, want):
     return around, False
 
 
+def _paper_never_into_scissors(p, want, fear_pool, prey=None):
+    """Paper must not fly AT Scissors. Divert around to prey, not orbit the pack."""
+    if want is None or _tname(p) != 'PAPER':
+        return want
+    best, best_d2 = None, 1e18
+    cap = (p.size * 12.0) ** 2
+    for q in fear_pool or ():
+        if q is p:
+            continue
+        d2 = (q.x - p.x) ** 2 + (q.y - p.y) ** 2
+        if d2 < best_d2 and d2 <= cap:
+            best, best_d2 = q, d2
+    if best is None:
+        return want
+    d = math.sqrt(best_d2)
+    fear_h = heading_to(p.x, p.y, best.x, best.y)
+    if d < p.size * 6.0:
+        return ang_norm(fear_h + math.pi)
+    if abs(ang_diff(want, fear_h)) < 1.0:
+        if prey is not None:
+            fx, fy = prey.x - best.x, prey.y - best.y
+            fl = math.hypot(fx, fy) or 1.0
+            return heading_to(
+                p.x, p.y,
+                prey.x + fx / fl * p.size * 6.0,
+                prey.y + fy / fl * p.size * 6.0)
+        sign = 1.0 if (_pid(p) % 2) else -1.0
+        return ang_norm(fear_h + sign * (math.pi * 0.5))
+    return want
+
+
 def _kite_prey_away_from_fear(p, prey, fear, loose=False):
     """If predator sits on the path to prey, go around — never through."""
     if prey is None or fear is None:
@@ -1345,6 +1376,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             out = math.atan2(dx, -dy)
             ww = 0.92 if d < r + p.size * 1.8 else 0.5
             want = blend_headings(blend_headings(want, tang, ww), out, 0.28)
+    prey_obj = prey['obj'] if prey and prey.get('obj') is not None else None
+    want = _paper_never_into_scissors(p, want, fear_pool, prey_obj)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))

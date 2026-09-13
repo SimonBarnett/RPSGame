@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 45, gen: 455, games: 10368, at: "2026-09-13 20:34Z", sha: "7edc97f" };
+  const BUILD = { n: 46, gen: 457, games: 10372, at: "2026-09-13 20:37Z", sha: "770df81" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1643,6 +1643,7 @@
         }
       }
 
+      want = paperNeverIntoScissors(p, want, prey && prey.obj);
       if (want != null) {
         const dlt = angDiff(p.angle, want);
         p.angle = angNorm(p.angle + Math.max(-maxTurn, Math.min(maxTurn, dlt)));
@@ -1704,6 +1705,33 @@
           if (opts.onSfx) opts.onSfx('collide');
         }
       }
+    }
+
+    function paperNeverIntoScissors(p, want, prey) {
+      if (want == null || p.type !== 'PAPER') return want;
+      const fearT = FEAR[p.type];
+      let best = null, bestD2 = 1e18;
+      const cap = (p.size * 12) * (p.size * 12);
+      for (let i = 0; i < particles.length; i++) {
+        const q = particles[i];
+        if (q === p || q.type !== fearT) continue;
+        const d2 = (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y);
+        if (d2 < bestD2 && d2 <= cap) { bestD2 = d2; best = q; }
+      }
+      if (!best) return want;
+      const d = Math.sqrt(bestD2);
+      const fearH = headingTo(p.x, p.y, best.x, best.y);
+      if (d < p.size * 6) return angNorm(fearH + Math.PI);
+      if (Math.abs(angDiff(want, fearH)) < 1.0) {
+        if (prey) {
+          const fx = prey.x - best.x, fy = prey.y - best.y;
+          const fl = Math.hypot(fx, fy) || 1;
+          return headingTo(p.x, p.y, prey.x + fx / fl * p.size * 6, prey.y + fy / fl * p.size * 6);
+        }
+        const sign = (p.id % 2) ? 1 : -1;
+        return angNorm(fearH + sign * (Math.PI * 0.5));
+      }
+      return want;
     }
 
     function kitePreyAwayFromFear(p, prey, fear, loose) {
