@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 28, gen: 57, games: 9429, at: "2026-09-13 09:44Z", sha: "0dbd194" };
+  const BUILD = { n: 30, gen: 63, games: 9461, at: "2026-09-13 10:07Z", sha: "cc464bc" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -999,8 +999,8 @@
     const prey = ctx.prey && ctx.prey.obj, fear = ctx.fear && ctx.fear.obj;
     let list = (steps || []).slice();
     const CHASE_FNS = { 'time.heading': 1, 'time.eta': 1, 'intercept.heading': 1, 'intercept.lead': 1, 'intercept.chord': 1, 'lanes.heading': 1 };
-    if (state === 'LAST_PREY_RISK' || (ctx.fearN > 0 && ctx.preyN <= 1)) {
-      list = list.filter(function (s) { return !CHASE_FNS[String((s || {}).fn || '')]; });
+    if (state === 'LAST_PREY_RISK' || (ctx.fearN > 0 && ctx.preyN <= 1) || ctx.fearN >= 2) {
+      list = list.filter(function (s) { return !CHASE_FNS[String((s || {}).fn || '')]; });}
     }
     if (state === 'CONTESTED' || state === 'SMALL_UNIT') {
       list = list.filter(function (s) {
@@ -1544,6 +1544,10 @@
         const cone = fearClumpSteer(p, want);
         if (cone != null) { want = cone; mode = 'evade'; }
       }
+      if (prey && prey.obj && fear && fear.obj && state !== 'NEAR_WIPE') {
+        const kite = kitePreyAwayFromFear(p, prey.obj, fear.obj, p.type === 'PAPER' && fearN >= 1);
+        if (kite != null) { want = kite; mode = 'chase'; }
+      }
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
       const eject = packEject(p, particles);
@@ -1645,11 +1649,27 @@
       }
     }
 
+    function kitePreyAwayFromFear(p, prey, fear, loose) {
+      if (!prey || !fear) return null;
+      const fd = Math.hypot(p.x - fear.x, p.y - fear.y);
+      const pd = Math.hypot(p.x - prey.x, p.y - prey.y);
+      const toP = headingTo(p.x, p.y, prey.x, prey.y);
+      const toF = headingTo(p.x, p.y, fear.x, fear.y);
+      const lim = loose ? 1.1 : 0.9;
+      const blocked = Math.abs(angDiff(toP, toF)) < lim && fd < pd + p.size * (loose ? 6 : 4);
+      if (!blocked) return null;
+      const fx = prey.x - fear.x, fy = prey.y - fear.y;
+      const fl = Math.hypot(fx, fy) || 1;
+      return headingTo(p.x, p.y, prey.x + fx / fl * p.size * 6, prey.y + fy / fl * p.size * 6);
+    }
+
     function fearClumpSteer(p, want) {
       const fearT = FEAR[p.type];
       if (!fearT || want == null) return null;
-      const rng = p.size * 10;
+      const paper = p.type === 'PAPER';
+      const rng = p.size * (paper ? 14 : 10);
       const rng2 = rng * rng;
+      const cone = paper ? 0.50 : 0.76;
       const wx = Math.sin(want), wy = -Math.cos(want);
       let sx = 0, sy = 0, n = 0, close = false;
       for (let i = 0; i < particles.length; i++) {
@@ -1659,11 +1679,11 @@
         const d2 = dx * dx + dy * dy;
         if (d2 > rng2 || d2 < 1e-8) continue;
         const d = Math.sqrt(d2);
-        if ((dx * wx + dy * wy) / d < 0.76) continue;
+        if ((dx * wx + dy * wy) / d < cone) continue;
         sx += q.x; sy += q.y; n++;
         if (d < p.size * 4.5) close = true;
       }
-      const minN = (p.state === 'LAST_MAN') ? 1 : 2;
+      const minN = (paper || p.state === 'LAST_MAN') ? 1 : 2;
       if (n < minN) return null;
       const cx = sx / n, cy = sy / n;
       if (close) return angNorm(headingTo(p.x, p.y, cx, cy) + Math.PI);

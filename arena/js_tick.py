@@ -527,12 +527,14 @@ def roles_assign(members):
 
 
 def _fear_clump_steer(p, particles, prey_t, want):
-    """If 2+ fear sit in the forward cone, go around — do not ram the pack."""
+    """If fear sits in the forward cone, go around — do not ram the pack."""
     fear_t = FEAR_N.get(_tname(p))
     if not fear_t or want is None:
         return None
-    rng = p.size * 10.0
+    paper = _tname(p) == 'PAPER'
+    rng = p.size * (14.0 if paper else 10.0)
     rng2 = rng * rng
+    cone = 0.50 if paper else 0.76
     wx, wy = math.sin(want), -math.cos(want)
     sx = sy = 0.0
     n = 0
@@ -545,14 +547,14 @@ def _fear_clump_steer(p, particles, prey_t, want):
         if d2 > rng2 or d2 < 1e-8:
             continue
         d = math.sqrt(d2)
-        if (dx * wx + dy * wy) / d < 0.76:
+        if (dx * wx + dy * wy) / d < cone:
             continue
         sx += q.x
         sy += q.y
         n += 1
         if d < p.size * 4.5:
             close = True
-    min_n = 1 if getattr(p, 'state', None) == 'LAST_MAN' else 2
+    min_n = 1 if (paper or getattr(p, 'state', None) == 'LAST_MAN') else 2
     if n < min_n:
         return None
     cx, cy = sx / n, sy / n
@@ -562,6 +564,25 @@ def _fear_clump_steer(p, particles, prey_t, want):
     sign = 1.0 if (_pid(p) % 2) else -1.0
     around = ang_norm(ch + sign * (math.pi * 0.5))
     return blend_headings(want, around, 0.85)
+
+
+def _kite_prey_away_from_fear(p, prey, fear, loose=False):
+    """Hunt the far side of prey from fear — do not charge through a pack."""
+    if prey is None or fear is None:
+        return None
+    fd = math.hypot(p.x - fear.x, p.y - fear.y)
+    pd = math.hypot(p.x - prey.x, p.y - prey.y)
+    to_p = heading_to(p.x, p.y, prey.x, prey.y)
+    to_f = heading_to(p.x, p.y, fear.x, fear.y)
+    lim = 1.1 if loose else 0.9
+    blocked = abs(ang_diff(to_p, to_f)) < lim and fd < pd + p.size * (6.0 if loose else 4.0)
+    if not blocked:
+        return None
+    fx, fy = prey.x - fear.x, prey.y - fear.y
+    fl = math.hypot(fx, fy) or 1.0
+    tx = prey.x + fx / fl * p.size * 6.0
+    ty = prey.y + fy / fl * p.size * 6.0
+    return heading_to(p.x, p.y, tx, ty)
 
 
 def roles_heading(p, prey, fear, allies=None):
@@ -607,7 +628,7 @@ def apply_moves(want, steps, ctx):
         fear = fr if fr is not None else ctx.get('fear_obj')
     lst = list(steps or [])
     fear_n, prey_n = ctx.get('fearN', 0), ctx.get('preyN', 0)
-    if state == 'LAST_PREY_RISK' or (fear_n > 0 and prey_n <= 1):
+    if state == 'LAST_PREY_RISK' or (fear_n > 0 and prey_n <= 1) or fear_n >= 2:
         lst = [s for s in lst if str((s or {}).get('fn') or '') not in CHASE_FNS]
     if state in ('CONTESTED', 'SMALL_UNIT'):
         lst = [s for s in lst if not str((s or {}).get('fn') or '').startswith('cover.')]
@@ -1231,6 +1252,14 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         if cone is not None:
             want = cone
             mode = 'evade'
+    if (prey and prey.get('obj') is not None and fear and fear.get('obj') is not None
+            and state != 'NEAR_WIPE'):
+        kite = _kite_prey_away_from_fear(
+            p, prey['obj'], fear['obj'],
+            loose=(_tname(p) == 'PAPER' and fear_n >= 1))
+        if kite is not None:
+            want = kite
+            mode = 'chase'
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])
