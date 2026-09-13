@@ -577,50 +577,73 @@ def _fear_clump_steer(p, particles, prey_t, want):
 
 
 def _paper_never_into_scissors(p, want, fear_pool, prey=None):
-    """Paper last-heading veto: never fly at Scissors; hunt around to far-side of Rock."""
+    """Paper last-heading veto: never fly at a Scissors pack; hunt around to far-side of Rock."""
     if want is None or _tname(p) != 'PAPER':
         return want
     best, best_d2 = None, 1e18
     cap = (p.size * 14.0) ** 2
+    near = []
+    sx = sy = 0.0
     for q in fear_pool or ():
         if q is p:
             continue
         d2 = (q.x - p.x) ** 2 + (q.y - p.y) ** 2
-        if d2 < best_d2 and d2 <= cap:
+        if d2 > cap:
+            continue
+        near.append(q)
+        sx += q.x
+        sy += q.y
+        if d2 < best_d2:
             best, best_d2 = q, d2
     if best is None:
         return want
-    d = math.sqrt(best_d2)
-    fear_h = heading_to(p.x, p.y, best.x, best.y)
+    n = len(near)
+    cx, cy = sx / n, sy / n
+    pack_r = p.size
+    for q in near:
+        pr = math.hypot(q.x - cx, q.y - cy) + (getattr(q, 'size', None) or p.size)
+        if pr > pack_r:
+            pack_r = pr
+    near_h = heading_to(p.x, p.y, best.x, best.y)
+    pack_h = heading_to(p.x, p.y, cx, cy)
+
+    def _hits(h):
+        for q in near:
+            if abs(ang_diff(h, heading_to(p.x, p.y, q.x, q.y))) < 1.05:
+                return True
+        return False
+
     if prey is None:
-        if d < p.size * 6.0 or abs(ang_diff(want, fear_h)) < 1.05:
-            return ang_norm(fear_h + math.pi)
+        if best_d2 < (p.size * 6.0) ** 2 or _hits(want):
+            return ang_norm(near_h + math.pi)
         return want
-    fx, fy = prey.x - best.x, prey.y - best.y
+    fx, fy = prey.x - cx, prey.y - cy
     fl = math.hypot(fx, fy) or 1.0
-    gx = prey.x + fx / fl * p.size * 8.0
-    gy = prey.y + fy / fl * p.size * 8.0
+    gx = prey.x + fx / fl * (pack_r + p.size * 8.0)
+    gy = prey.y + fy / fl * (pack_r + p.size * 8.0)
     to_goal = heading_to(p.x, p.y, gx, gy)
-    if abs(ang_diff(to_goal, fear_h)) >= 1.05:
+    if not _hits(to_goal):
         return to_goal
-    px, py = -(best.y - p.y), best.x - p.x
+    px, py = -(cy - p.y), cx - p.x
     if px * (gx - p.x) + py * (gy - p.y) < 0:
         px, py = -px, -py
     pl = math.hypot(px, py) or 1.0
-    along = p.size * 6.0
-    clear = max(p.size * 8.0, 1.8 * (d + along))
+    along = pack_r + p.size * 6.0
+    clear = pack_r + p.size * 10.0
     wrap = heading_to(
         p.x, p.y,
-        best.x + px / pl * clear + fx / fl * along,
-        best.y + py / pl * clear + fy / fl * along)
-    if abs(ang_diff(wrap, fear_h)) >= 0.90:
+        cx + px / pl * clear + fx / fl * along,
+        cy + py / pl * clear + fy / fl * along)
+    if not _hits(wrap):
         return wrap
-    left = ang_norm(fear_h + 1.20)
-    right = ang_norm(fear_h - 1.20)
+    d_pack = math.hypot(p.x - cx, p.y - cy)
+    min_off = max(1.20, math.atan2(pack_r + p.size * 4.0, max(d_pack, p.size)))
+    left = ang_norm(pack_h + min_off)
+    right = ang_norm(pack_h - min_off)
     h = left if abs(ang_diff(left, to_goal)) <= abs(ang_diff(right, to_goal)) else right
-    if abs(ang_diff(h, fear_h)) >= 0.90:
+    if not _hits(h):
         return h
-    return ang_norm(fear_h + math.pi)
+    return ang_norm(near_h + math.pi)
 
 
 def _avoid_fear_overlap(p, want, fear_pool):

@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 50, gen: 481, games: 10443, at: "2026-09-13 21:35Z", sha: "2b35434" };
+  const BUILD = { n: 51, gen: 510, games: 10518, at: "2026-09-13 22:05Z", sha: "6eeb176" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1706,43 +1706,63 @@
     function paperNeverIntoScissors(p, want, prey) {
       if (want == null || p.type !== 'PAPER') return want;
       const fearT = FEAR[p.type];
-      let best = null, bestD2 = 1e18;
       const cap = (p.size * 14) * (p.size * 14);
+      let best = null, bestD2 = 1e18, sx = 0, sy = 0, n = 0;
+      const near = [];
       for (let i = 0; i < particles.length; i++) {
         const q = particles[i];
         if (q === p || q.type !== fearT) continue;
         const d2 = (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y);
-        if (d2 < bestD2 && d2 <= cap) { bestD2 = d2; best = q; }
+        if (d2 > cap) continue;
+        near.push(q);
+        sx += q.x; sy += q.y; n++;
+        if (d2 < bestD2) { bestD2 = d2; best = q; }
       }
       if (!best) return want;
-      const d = Math.sqrt(bestD2);
-      const fearH = headingTo(p.x, p.y, best.x, best.y);
+      const cx = sx / n, cy = sy / n;
+      let packR = p.size;
+      for (let i = 0; i < near.length; i++) {
+        const q = near[i];
+        const pr = Math.hypot(q.x - cx, q.y - cy) + (q.size || p.size);
+        if (pr > packR) packR = pr;
+      }
+      const nearH = headingTo(p.x, p.y, best.x, best.y);
+      const packH = headingTo(p.x, p.y, cx, cy);
+      const blocked = function (h) {
+        for (let i = 0; i < near.length; i++) {
+          const q = near[i];
+          if (Math.abs(angDiff(h, headingTo(p.x, p.y, q.x, q.y))) < 1.05) return true;
+        }
+        return false;
+      };
       if (!prey) {
-        if (d < p.size * 6 || Math.abs(angDiff(want, fearH)) < 1.05) return angNorm(fearH + Math.PI);
+        if (bestD2 < (p.size * 6) * (p.size * 6) || blocked(want)) return angNorm(nearH + Math.PI);
         return want;
       }
-      const fx = prey.x - best.x, fy = prey.y - best.y;
+      const fx = prey.x - cx, fy = prey.y - cy;
       const fl = Math.hypot(fx, fy) || 1;
-      const gx = prey.x + fx / fl * p.size * 8;
-      const gy = prey.y + fy / fl * p.size * 8;
+      const gx = prey.x + fx / fl * (packR + p.size * 8);
+      const gy = prey.y + fy / fl * (packR + p.size * 8);
       const toGoal = headingTo(p.x, p.y, gx, gy);
-      if (Math.abs(angDiff(toGoal, fearH)) >= 1.05) return toGoal;
-      let px = -(best.y - p.y), py = best.x - p.x;
+      if (!blocked(toGoal)) return toGoal;
+      let px = -(cy - p.y), py = cx - p.x;
       if (px * (gx - p.x) + py * (gy - p.y) < 0) { px = -px; py = -py; }
       const pl = Math.hypot(px, py) || 1;
-      const along = p.size * 6;
-      const clear = Math.max(p.size * 8, 1.8 * (d + along));
+      const along = packR + p.size * 6;
+      const clear = packR + p.size * 10;
       const wrap = headingTo(
         p.x, p.y,
-        best.x + px / pl * clear + fx / fl * along,
-        best.y + py / pl * clear + fy / fl * along
+        cx + px / pl * clear + fx / fl * along,
+        cy + py / pl * clear + fy / fl * along
       );
-      if (Math.abs(angDiff(wrap, fearH)) >= 0.90) return wrap;
-      const left = angNorm(fearH + 1.20);
-      const right = angNorm(fearH - 1.20);
+      if (!blocked(wrap)) return wrap;
+      const dPack = Math.hypot(p.x - cx, p.y - cy);
+      const minOff = Math.max(1.20, Math.atan2(packR + p.size * 4, Math.max(dPack, p.size)));
+      const left = angNorm(packH + minOff);
+      const right = angNorm(packH - minOff);
       const h = Math.abs(angDiff(left, toGoal)) <= Math.abs(angDiff(right, toGoal)) ? left : right;
-      if (Math.abs(angDiff(h, fearH)) >= 0.90) return h;
-      return angNorm(fearH + Math.PI);
+      if (!blocked(h)) return h;
+      return angNorm(nearH + Math.PI);
     }
 
     function avoidFearOverlap(p, want) {
