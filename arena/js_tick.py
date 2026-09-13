@@ -577,11 +577,11 @@ def _fear_clump_steer(p, particles, prey_t, want):
 
 
 def _paper_never_into_scissors(p, want, fear_pool, prey=None):
-    """Paper must not fly AT Scissors. Divert around to prey, not orbit the pack."""
+    """Paper last-heading veto: never fly at Scissors; wrap to far-side of Rock."""
     if want is None or _tname(p) != 'PAPER':
         return want
     best, best_d2 = None, 1e18
-    cap = (p.size * 12.0) ** 2
+    cap = (p.size * 14.0) ** 2
     for q in fear_pool or ():
         if q is p:
             continue
@@ -592,19 +592,30 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
         return want
     d = math.sqrt(best_d2)
     fear_h = heading_to(p.x, p.y, best.x, best.y)
+    into = abs(ang_diff(want, fear_h))
+    orbiting = abs(into - math.pi * 0.5) < 0.40
     if d < p.size * 6.0:
         return ang_norm(fear_h + math.pi)
-    if abs(ang_diff(want, fear_h)) < 1.0:
-        if prey is not None:
-            fx, fy = prey.x - best.x, prey.y - best.y
-            fl = math.hypot(fx, fy) or 1.0
-            return heading_to(
-                p.x, p.y,
-                prey.x + fx / fl * p.size * 6.0,
-                prey.y + fy / fl * p.size * 6.0)
-        sign = 1.0 if (_pid(p) % 2) else -1.0
-        return ang_norm(fear_h + sign * (math.pi * 0.5))
-    return want
+    if into >= 1.05 and not orbiting:
+        return want
+    if prey is None:
+        return ang_norm(fear_h + math.pi)
+    fx, fy = prey.x - best.x, prey.y - best.y
+    fl = math.hypot(fx, fy) or 1.0
+    gx = prey.x + fx / fl * p.size * 8.0
+    gy = prey.y + fy / fl * p.size * 8.0
+    to_goal = heading_to(p.x, p.y, gx, gy)
+    if abs(ang_diff(to_goal, fear_h)) >= 1.05:
+        return to_goal
+    left = ang_norm(fear_h + math.pi * 0.5)
+    right = ang_norm(fear_h - math.pi * 0.5)
+    dl = abs(ang_diff(left, to_goal))
+    dr = abs(ang_diff(right, to_goal))
+    if dl < dr - 1e-6:
+        return left
+    if dr < dl - 1e-6:
+        return right
+    return left if abs(ang_diff(want, left)) <= abs(ang_diff(want, right)) else right
 
 
 def _avoid_fear_overlap(p, want, fear_pool):
@@ -1399,8 +1410,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             ww = 0.92 if d < r + p.size * 1.8 else 0.5
             want = blend_headings(blend_headings(want, tang, ww), out, 0.28)
     prey_obj = prey['obj'] if prey and prey.get('obj') is not None else None
-    want = _paper_never_into_scissors(p, want, fear_pool, prey_obj)
     want = _avoid_fear_overlap(p, want, fear_pool)
+    want = _paper_never_into_scissors(p, want, fear_pool, prey_obj)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))

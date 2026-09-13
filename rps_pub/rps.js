@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 48, gen: 465, games: 10401, at: "2026-09-13 20:52Z", sha: "a5c1a1d" };
+  const BUILD = { n: 49, gen: 470, games: 10420, at: "2026-09-13 21:09Z", sha: "3d1a281" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1643,8 +1643,8 @@
         }
       }
 
-      want = paperNeverIntoScissors(p, want, prey && prey.obj);
       want = avoidFearOverlap(p, want);
+      want = paperNeverIntoScissors(p, want, prey && prey.obj);
       if (want != null) {
         const dlt = angDiff(p.angle, want);
         p.angle = angNorm(p.angle + Math.max(-maxTurn, Math.min(maxTurn, dlt)));
@@ -1707,7 +1707,7 @@
       if (want == null || p.type !== 'PAPER') return want;
       const fearT = FEAR[p.type];
       let best = null, bestD2 = 1e18;
-      const cap = (p.size * 12) * (p.size * 12);
+      const cap = (p.size * 14) * (p.size * 14);
       for (let i = 0; i < particles.length; i++) {
         const q = particles[i];
         if (q === p || q.type !== fearT) continue;
@@ -1717,17 +1717,24 @@
       if (!best) return want;
       const d = Math.sqrt(bestD2);
       const fearH = headingTo(p.x, p.y, best.x, best.y);
+      const into = Math.abs(angDiff(want, fearH));
+      const orbiting = Math.abs(into - Math.PI * 0.5) < 0.40;
       if (d < p.size * 6) return angNorm(fearH + Math.PI);
-      if (Math.abs(angDiff(want, fearH)) < 1.0) {
-        if (prey) {
-          const fx = prey.x - best.x, fy = prey.y - best.y;
-          const fl = Math.hypot(fx, fy) || 1;
-          return headingTo(p.x, p.y, prey.x + fx / fl * p.size * 6, prey.y + fy / fl * p.size * 6);
-        }
-        const sign = (p.id % 2) ? 1 : -1;
-        return angNorm(fearH + sign * (Math.PI * 0.5));
-      }
-      return want;
+      if (into >= 1.05 && !orbiting) return want;
+      if (!prey) return angNorm(fearH + Math.PI);
+      const fx = prey.x - best.x, fy = prey.y - best.y;
+      const fl = Math.hypot(fx, fy) || 1;
+      const gx = prey.x + fx / fl * p.size * 8;
+      const gy = prey.y + fy / fl * p.size * 8;
+      const toGoal = headingTo(p.x, p.y, gx, gy);
+      if (Math.abs(angDiff(toGoal, fearH)) >= 1.05) return toGoal;
+      const left = angNorm(fearH + Math.PI * 0.5);
+      const right = angNorm(fearH - Math.PI * 0.5);
+      const dl = Math.abs(angDiff(left, toGoal));
+      const dr = Math.abs(angDiff(right, toGoal));
+      if (dl < dr - 1e-6) return left;
+      if (dr < dl - 1e-6) return right;
+      return Math.abs(angDiff(want, left)) <= Math.abs(angDiff(want, right)) ? left : right;
     }
 
     function avoidFearOverlap(p, want) {
