@@ -3594,29 +3594,46 @@ class StrategyOptimizer:
             bo.LAST_MIGRATE = 0
 
     def _match_cycle_nudge(self, A):
-        """Nudge kite/hunt knobs from match A (not conversion tautology). No duration."""
+        """Nudge kite/hunt knobs from match A. Cap 2/type so GEN is not every game."""
         if not A:
             return 0
         import strategies.playbook as playbook
-        n = 0
         sp = float((A.get('SCISSORS') or {}).get('PAPER') or 0)
         rs = float((A.get('ROCK') or {}).get('SCISSORS') or 0)
-        if sp > 0.15:
+        if sp <= 0.20 and rs >= -0.20:
+            return 0
+        gen = int(getattr(self, 'GENERATION', 0) or 0)
+        hist = [x for x in (getattr(self, '_match_nudge_hist', None) or [])
+                if gen - int(x[0]) < 8]
+        seen = {x[1] for x in hist}
+        n = 0
+        per = {'ROCK': 0, 'PAPER': 0, 'SCISSORS': 0}
+
+        def try_nudge(tname, sid, path, direction, strength):
+            nonlocal n
+            if per.get(tname, 0) >= 2:
+                return
+            key = '%s.%s.%s' % (tname, sid, path)
+            if key in seen:
+                return
+            if playbook.nudge_tunable(tname, sid, path, direction, strength=strength):
+                n += 1
+                per[tname] = per.get(tname, 0) + 1
+                seen.add(key)
+                hist.append((gen, key))
+                self.last_changes.append('%s match' % key)
+
+        if sp > 0.20:
             for sid in ('OPEN_KITE', 'FORT_KITE', 'ORBIT_KITE', 'SURVIVE_FEAR', 'SCREEN_HUNT'):
                 for path in ('escape_bonus', 'fort_cover_weight', 'avoid_weight'):
-                    if playbook.nudge_tunable('PAPER', sid, path, +1, strength=0.65):
-                        n += 1
-                        self.last_changes.append('PAPER.%s.%s match-S>P' % (sid, path))
+                    try_nudge('PAPER', sid, path, +1, 0.65)
             for sid in ('PACK_HUNT', 'CLEAR_SPLIT'):
-                if playbook.nudge_tunable('SCISSORS', sid, 'near_target_aggro', -1, strength=0.4):
-                    n += 1
-                    self.last_changes.append('SCISSORS.%s.near_target_aggro match-S>P' % sid)
-        if rs < -0.15:
+                try_nudge('SCISSORS', sid, 'near_target_aggro', -1, 0.4)
+        if rs < -0.20:
             for sid in ('PACK_HUNT', 'CLEAR_SPLIT', 'SCREEN_HUNT'):
                 for path in ('near_target_aggro', 'pack_hunt_mult'):
-                    if playbook.nudge_tunable('ROCK', sid, path, +1, strength=0.65):
-                        n += 1
-                        self.last_changes.append('ROCK.%s.%s match-R>S' % (sid, path))
+                    try_nudge('ROCK', sid, path, +1, 0.65)
+        self._match_nudge_hist = hist
         return n
 
     def _is_combat_card(self, sid, ov):

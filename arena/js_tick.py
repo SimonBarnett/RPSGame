@@ -491,6 +491,14 @@ def intercept_heading(p, prey, mode):
     return chase_heading(p, prey, 18)
 
 
+def hunt_heading(p, prey, look, tn):
+    if prey is None:
+        return None
+    if tn == 'ROCK':
+        return intercept_heading(p, prey, 'lead')
+    return chase_heading(p, prey, look)
+
+
 def time_heading(p, prey, fear):
     if prey is None:
         return None
@@ -577,6 +585,8 @@ def _kite_prey_away_from_fear(p, prey, fear, loose=False):
     to_p = heading_to(p.x, p.y, prey.x, prey.y)
     to_f = heading_to(p.x, p.y, fear.x, fear.y)
     lim = 1.1 if loose else 0.9
+    if fd > p.size * 10.0:
+        return None
     blocked = abs(ang_diff(to_p, to_f)) < lim and fd < pd + p.size * (6.0 if loose else 4.0)
     if not blocked:
         return None
@@ -1174,7 +1184,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             if tgt is not None:
                 bag['map'][_pid(p)] = tgt
         p._locked = tgt
-        want = chase_heading(p, tgt, look) if tgt is not None else want
+        want = hunt_heading(p, tgt, look, tn) if tgt is not None else want
     elif fear and fobj is not None and fear_n > 0 and state != 'CLEAR_HUNT':
         fear_ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fobj.x, fobj.y))) < math.pi / 2
         fear_close = fear['d'] < 8 * p.size or (fear_ahead and fear['d'] < 12 * p.size)
@@ -1184,7 +1194,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             p._locked = None
         elif prey:
             mode = 'chase'
-            want = blend_headings(chase_heading(p, prey['obj'], look), sector_h, 0.35)
+            want = blend_headings(hunt_heading(p, prey['obj'], look, tn), sector_h, 0.35)
             p._locked = prey['obj']
     elif prey:
         closer = 0
@@ -1199,7 +1209,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             p._locked = None
         else:
             mode = 'chase'
-            want = blend_headings(chase_heading(p, prey['obj'], look), sector_h, 0.35)
+            want = blend_headings(hunt_heading(p, prey['obj'], look, tn), sector_h, 0.35)
             p._locked = prey['obj']
     else:
         want = sector_h
@@ -1249,7 +1259,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     })
     locked = getattr(p, '_locked', None)
     if state == 'CLEAR_HUNT' and locked is not None and locked in world.particles:
-        want = chase_heading(p, locked, look)
+        want = hunt_heading(p, locked, look, tn)
         mode = 'chase'
     if fear_n > 0 and prey_n <= 1 and prey and prey.get('obj') is not None and prey['d'] < p.size * 4:
         want = safe_h

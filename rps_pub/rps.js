@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 34, gen: 202, games: 9862, at: "2026-09-13 16:31Z", sha: "e971a25" };
+  const BUILD = { n: 35, gen: 284, games: 9944, at: "2026-09-13 17:02Z", sha: "85b6685" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -940,6 +940,11 @@
     }
     return chaseHeading(p, prey, 18);
   }
+  function huntHeading(p, prey, look) {
+    if (!prey) return null;
+    if (p.type === 'ROCK') return interceptHeading(p, prey, 'lead');
+    return chaseHeading(p, prey, look);
+  }
   /** Chase only if convert ETA beats predator ETA (maths/time.py). */
   function timeHeading(p, prey, fear) {
     if (!prey) return null;
@@ -1479,7 +1484,7 @@
           simVoronoi.map[p.id] = tgt;
         }
         p._locked = tgt;
-        want = chaseHeading(p, tgt, look);
+        want = huntHeading(p, tgt, look);
       } else if (fear && fobj && fearN > 0 && state !== 'CLEAR_HUNT') {
         const fearAhead = Math.abs(angDiff(p.angle, headingTo(p.x, p.y, fobj.x, fobj.y))) < Math.PI / 2;
         const fearClose = fear.d < 8 * p.size || (fearAhead && fear.d < 12 * p.size);
@@ -1489,7 +1494,7 @@
           p._locked = null;
         } else if (prey) {
           mode = 'chase';
-          want = blendHeadings(chaseHeading(p, prey.obj, look), sectorH, 0.35);
+          want = blendHeadings(huntHeading(p, prey.obj, look), sectorH, 0.35);
           p._locked = prey.obj;
         }
       } else if (prey) {
@@ -1505,7 +1510,7 @@
           p._locked = null;
         } else {
           mode = 'chase';
-          want = blendHeadings(chaseHeading(p, prey.obj, look), sectorH, 0.35);
+          want = blendHeadings(huntHeading(p, prey.obj, look), sectorH, 0.35);
           p._locked = prey.obj;
         }
       } else {
@@ -1541,7 +1546,7 @@
         look: look, fearN: fearN, preyN: preyN, allies: allies, preys: preys
       });
       if (state === 'CLEAR_HUNT' && p._locked && particles.indexOf(p._locked) >= 0) {
-        want = chaseHeading(p, p._locked, look);
+        want = huntHeading(p, p._locked, look);
         mode = 'chase';
       }
       // Python last-prey: steer OFF the meal while predators live. Nothing else may overwrite this.
@@ -1681,6 +1686,7 @@
       const pd = Math.hypot(p.x - prey.x, p.y - prey.y);
       const toP = headingTo(p.x, p.y, prey.x, prey.y);
       const toF = headingTo(p.x, p.y, fear.x, fear.y);
+      if (fd > p.size * 10) return null;
       const lim = loose ? 1.1 : 0.9;
       const blocked = Math.abs(angDiff(toP, toF)) < lim && fd < pd + p.size * (loose ? 6 : 4);
       if (!blocked) return null;
