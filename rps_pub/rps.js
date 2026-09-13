@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 22, gen: 8, games: 9206, at: "2026-09-12 20:04Z", sha: "9e3020d" };
+  const BUILD = { n: 23, gen: 16, games: 9297, at: "2026-09-13 07:52Z", sha: "5aee398" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1534,6 +1534,10 @@
         if (fd < p.size * 4.5) { want = flee; mode = 'evade'; }
         else if (fd < p.size * 6.5 && (fd < pd || inPath)) want = blendHeadings(want, flee, 0.65);
       }
+      if (state !== 'NEAR_WIPE' && want != null) {
+        const cone = fearClumpSteer(p, want);
+        if (cone != null) { want = cone; mode = 'evade'; }
+      }
       if (state === 'NEAR_WIPE' && fear && fear.obj && fear.d < p.size * 8) {
         want = blendHeadings(want, interceptHeading(p, fear.obj, 'lead'), 0.55);
       }
@@ -1636,6 +1640,32 @@
           if (opts.onSfx) opts.onSfx('collide');
         }
       }
+    }
+
+    function fearClumpSteer(p, want) {
+      const fearT = FEAR[p.type];
+      if (!fearT || want == null) return null;
+      const rng = p.size * 10;
+      const rng2 = rng * rng;
+      const wx = Math.sin(want), wy = -Math.cos(want);
+      let sx = 0, sy = 0, n = 0, close = false;
+      for (let i = 0; i < particles.length; i++) {
+        const q = particles[i];
+        if (q === p || q.type !== fearT) continue;
+        const dx = q.x - p.x, dy = q.y - p.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > rng2 || d2 < 1e-8) continue;
+        const d = Math.sqrt(d2);
+        if ((dx * wx + dy * wy) / d < 0.76) continue;
+        sx += q.x; sy += q.y; n++;
+        if (d < p.size * 4.5) close = true;
+      }
+      if (n < 2) return null;
+      const cx = sx / n, cy = sy / n;
+      if (close) return angNorm(headingTo(p.x, p.y, cx, cy) + Math.PI);
+      const ch = headingTo(p.x, p.y, cx, cy);
+      const sign = (p.id % 2) ? 1 : -1;
+      return blendHeadings(want, angNorm(ch + sign * (Math.PI * 0.5)), 0.85);
     }
 
     function victorySteer(p, dance, tick) {

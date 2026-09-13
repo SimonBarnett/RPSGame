@@ -508,6 +508,43 @@ def roles_assign(members):
             m._role = 'STRIKE' if i % 2 else 'BAIT'
 
 
+def _fear_clump_steer(p, particles, prey_t, want):
+    """If 2+ fear sit in the forward cone, go around — do not ram the pack."""
+    fear_t = FEAR_N.get(_tname(p))
+    if not fear_t or want is None:
+        return None
+    rng = p.size * 10.0
+    rng2 = rng * rng
+    wx, wy = math.sin(want), -math.cos(want)
+    sx = sy = 0.0
+    n = 0
+    close = False
+    for q in particles:
+        if _tname(q) != fear_t or q is p:
+            continue
+        dx, dy = q.x - p.x, q.y - p.y
+        d2 = dx * dx + dy * dy
+        if d2 > rng2 or d2 < 1e-8:
+            continue
+        d = math.sqrt(d2)
+        if (dx * wx + dy * wy) / d < 0.76:
+            continue
+        sx += q.x
+        sy += q.y
+        n += 1
+        if d < p.size * 4.5:
+            close = True
+    if n < 2:
+        return None
+    cx, cy = sx / n, sy / n
+    if close:
+        return ang_norm(heading_to(p.x, p.y, cx, cy) + math.pi)
+    ch = heading_to(p.x, p.y, cx, cy)
+    sign = 1.0 if (_pid(p) % 2) else -1.0
+    around = ang_norm(ch + sign * (math.pi * 0.5))
+    return blend_headings(want, around, 0.85)
+
+
 def roles_heading(p, prey, fear, allies=None):
     role = getattr(p, '_role', None) or 'STRIKE'
     if role == 'SCREEN' and fear is not None:
@@ -1129,6 +1166,11 @@ def think(world, p, counts, W, H, pad, world_k, forts):
             mode = 'evade'
         elif fd < p.size * 6.5 and (fd < pd or in_path):
             want = blend_headings(want, flee, 0.65)
+    if state != 'NEAR_WIPE' and want is not None:
+        cone = _fear_clump_steer(p, world.particles, prey_t, want)
+        if cone is not None:
+            want = cone
+            mode = 'evade'
     if state == 'NEAR_WIPE' and fear and fear.get('obj') is not None:
         fd = float(fear.get('d') or 1e9)
         if fd < p.size * 8:
