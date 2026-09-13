@@ -577,7 +577,7 @@ def _fear_clump_steer(p, particles, prey_t, want):
 
 
 def _kite_prey_away_from_fear(p, prey, fear, loose=False):
-    """Hunt the far side of prey from fear — do not charge through a pack."""
+    """If predator sits on the path to prey, go around — never through."""
     if prey is None or fear is None:
         return None
     fd = math.hypot(p.x - fear.x, p.y - fear.y)
@@ -585,11 +585,15 @@ def _kite_prey_away_from_fear(p, prey, fear, loose=False):
     to_p = heading_to(p.x, p.y, prey.x, prey.y)
     to_f = heading_to(p.x, p.y, fear.x, fear.y)
     lim = 1.1 if loose else 0.9
-    if fd > p.size * 10.0:
+    if fd > p.size * (16.0 if loose else 12.0):
         return None
     blocked = abs(ang_diff(to_p, to_f)) < lim and fd < pd + p.size * (6.0 if loose else 4.0)
     if not blocked:
         return None
+    # Fear is closer than prey: heading to the far side of prey still rams the pack.
+    if fd < pd:
+        sign = 1.0 if (_pid(p) % 2) else -1.0
+        return ang_norm(to_f + sign * (math.pi * 0.5))
     fx, fy = prey.x - fear.x, prey.y - fear.y
     fl = math.hypot(fx, fy) or 1.0
     tx = prey.x + fx / fl * p.size * 6.0
@@ -1293,11 +1297,6 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         fd = float(fear.get('d') or 1e9)
         if fd < p.size * 8:
             want = blend_headings(want, intercept_heading(p, fear['obj'], 'lead'), 0.55)
-    if want is not None:
-        cone = _fear_clump_steer(p, world.particles, prey_t, want)
-        if cone is not None:
-            want = cone
-            mode = 'evade'
     if (prey and prey.get('obj') is not None and fear and fear.get('obj') is not None
             and state != 'NEAR_WIPE'):
         kite = _kite_prey_away_from_fear(
@@ -1306,6 +1305,11 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         if kite is not None:
             want = kite
             mode = 'chase'
+    if want is not None:
+        cone = _fear_clump_steer(p, world.particles, prey_t, want)
+        if cone is not None:
+            want = cone
+            mode = 'evade'
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])

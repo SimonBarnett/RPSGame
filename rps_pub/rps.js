@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 38, gen: 335, games: 10056, at: "2026-09-13 17:56Z", sha: "46f1f79" };
+  const BUILD = { n: 39, gen: 375, games: 10147, at: "2026-09-13 18:35Z", sha: "9884066" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1597,13 +1597,13 @@
       if (state === 'NEAR_WIPE' && fear && fear.obj && fear.d < p.size * 8) {
         want = blendHeadings(want, interceptHeading(p, fear.obj, 'lead'), 0.55);
       }
-      if (want != null) {
-        const cone = fearClumpSteer(p, want);
-        if (cone != null) { want = cone; mode = 'evade'; }
-      }
       if (prey && prey.obj && fear && fear.obj && state !== 'NEAR_WIPE') {
         const kite = kitePreyAwayFromFear(p, prey.obj, fear.obj, p.type === 'PAPER' && fearN >= 1);
         if (kite != null) { want = kite; mode = 'chase'; }
+      }
+      if (want != null) {
+        const cone = fearClumpSteer(p, want);
+        if (cone != null) { want = cone; mode = 'evade'; }
       }
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
@@ -1712,10 +1712,14 @@
       const pd = Math.hypot(p.x - prey.x, p.y - prey.y);
       const toP = headingTo(p.x, p.y, prey.x, prey.y);
       const toF = headingTo(p.x, p.y, fear.x, fear.y);
-      if (fd > p.size * 10) return null;
+      if (fd > p.size * (loose ? 16 : 12)) return null;
       const lim = loose ? 1.1 : 0.9;
       const blocked = Math.abs(angDiff(toP, toF)) < lim && fd < pd + p.size * (loose ? 6 : 4);
       if (!blocked) return null;
+      if (fd < pd) {
+        const sign = (p.id % 2) ? 1 : -1;
+        return angNorm(toF + sign * (Math.PI * 0.5));
+      }
       const fx = prey.x - fear.x, fy = prey.y - fear.y;
       const fl = Math.hypot(fx, fy) || 1;
       return headingTo(p.x, p.y, prey.x + fx / fl * p.size * 6, prey.y + fy / fl * p.size * 6);
