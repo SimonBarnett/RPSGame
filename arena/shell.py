@@ -784,6 +784,7 @@ class Arena:
         self.optimizer.w = self
         self._learn = {'phase': 'idle', 'events': [], 'shown': 0}
         self._learn_pending = True   # first TITLE reads any existing logs
+        self._refresh_stamp()
         # Toolbar / winner icons
         self.toolbar_icons = {}
         self.winner_icons = {}
@@ -1173,6 +1174,7 @@ class Arena:
         # and the first TITLE frame paid for a 2–5s optimise+persist.
         pending = getattr(self, '_pending_gameover_type', None)
         if pending is not None and hasattr(self, 'metrics'):
+            games0 = Metrics.read_games_total()
             try:
                 self.metrics.log_gameover(pending)
             except Exception:
@@ -1180,6 +1182,19 @@ class Arena:
             self._pending_gameover_type = None
             # Heavy learn runs on the TITLE screen so the player can watch it.
             self._learn_pending = True
+            # Windowed play: GAMES ticks here. GEN ticks later, when persist
+            # writes a new strategy generation — not merely because a match ended.
+            if not getattr(Config, 'FAST_SIM', False):
+                try:
+                    gen, games = Metrics.ensure_learn_counters(
+                        None, games0, getattr(self, 'optimizer', None))
+                    self._refresh_stamp()
+                    feed = getattr(self, '_learn', None)
+                    if isinstance(feed, dict):
+                        feed['gen'] = gen
+                        feed['games'] = games
+                except Exception:
+                    pass
         self.particles = []
         self.startpos = []
         self.fort_list = []
@@ -1336,14 +1351,26 @@ class Arena:
         else:
             self._set_phase(MatchPhase.GAMEOVER)
 
+    def _refresh_stamp(self):
+        try:
+            self._stamp = Metrics.welcome_stamp()
+        except Exception:
+            self._stamp = {'n': 0, 'gen': 0, 'games': 0, 'at': '', 'sha': ''}
+
     def _begin_title_learn(self):
         opt = getattr(self, 'optimizer', None)
+        try:
+            gen = Metrics.read_generation()
+            games = Metrics.read_games_total()
+        except Exception:
+            gen = int(getattr(opt, 'GENERATION', 0) or 0) if opt else 0
+            games = int(getattr(opt, 'games_seen', 0) or 0) if opt else 0
         self._learn = {
             'phase': 'compute',
             'events': [],
             'shown': 0,
-            'gen': int(getattr(opt, 'GENERATION', 0) or 0) if opt else 0,
-            'games': int(getattr(opt, 'games_seen', 0) or 0) if opt else 0,
+            'gen': gen,
+            'games': games,
             'fitness': {},
             'share': {},
             'status': 'READING',
@@ -1361,9 +1388,15 @@ class Arena:
             return
         try:
             snap = opt.start_visible_pass()
+            try:
+                disk_gen = Metrics.read_generation()
+                disk_games = Metrics.read_games_total()
+            except Exception:
+                disk_gen = snap.get('gen', feed.get('gen', 0))
+                disk_games = snap.get('games', 0)
             feed.update({
-                'gen': snap.get('gen', feed.get('gen', 0)),
-                'games': snap.get('games', 0),
+                'gen': disk_gen,
+                'games': disk_games,
                 'window': snap.get('window', 0),
                 'wins': snap.get('wins') or {},
                 'simplex': snap.get('simplex') or {},
@@ -1413,6 +1446,12 @@ class Arena:
                     opt._persist_type_config(force=False)
                 except Exception:
                     pass
+            try:
+                feed['gen'] = Metrics.read_generation()
+                feed['games'] = Metrics.read_games_total()
+                self._refresh_stamp()
+            except Exception:
+                pass
             feed['phase'] = 'done'
             feed['status'] = 'READY'
 

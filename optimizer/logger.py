@@ -103,12 +103,23 @@ class Metrics:
         return cls.write_generation(cls.read_generation() + 1)
 
     @classmethod
-    def ensure_learn_counters(cls, gen_before, games_before, optimizer=None):
-        """After a finished /learn game: GEN and GAMES must rise, then stamp BUILD."""
-        if cls.read_games_total() <= int(games_before or 0):
-            cls.bump_games_total()
-        if cls.read_generation() <= int(gen_before or 0):
-            cls.bump_generation()
+    def welcome_stamp(cls):
+        """BUILD n + GEN/GAMES for PY and JS welcome lines."""
+        bag = {'n': 0, 'gen': cls.read_generation(), 'games': cls.read_games_total(),
+               'at': '', 'sha': ''}
+        try:
+            import json
+            from tools.bump_build import BUILD_JSON
+            data = json.load(open(BUILD_JSON, encoding='utf-8'))
+            bag['n'] = int(data.get('build') or 0)
+            bag['at'] = str(data.get('at') or '')
+            bag['sha'] = str(data.get('sha') or '')
+        except Exception:
+            pass
+        return bag
+
+    @classmethod
+    def stamp_welcome(cls, optimizer=None):
         gen = cls.read_generation()
         games = cls.read_games_total()
         if optimizer is not None:
@@ -124,6 +135,27 @@ class Metrics:
         except Exception as e:
             print('stamp counters', e, flush=True)
         return gen, games
+
+    @classmethod
+    def ensure_learn_counters(cls, gen_before, games_before, optimizer=None):
+        """After a finished match: GAMES must rise. GEN is not bumped here."""
+        if cls.read_games_total() <= int(games_before or 0):
+            cls.bump_games_total()
+        return cls.stamp_welcome(optimizer)
+
+    @classmethod
+    def advance_generation(cls, optimizer=None):
+        """Persist wrote a new strategy generation — tick GEN and restamp welcome."""
+        gen = cls.bump_generation()
+        if optimizer is not None:
+            try:
+                from optimizer.engine import StrategyOptimizer
+                StrategyOptimizer.GENERATION = gen
+                optimizer._pending_generation = False
+            except Exception:
+                pass
+        cls.stamp_welcome(optimizer)
+        return gen
 
     @staticmethod
     def _safe_append(path, text_line):
@@ -974,6 +1006,7 @@ class Metrics:
             total = self.bump_games_total()
             if hasattr(self.w, 'optimizer') and self.w.optimizer is not None:
                 self.w.optimizer.games_seen = total
+                self.w.optimizer._pending_generation = True
         except Exception:
             pass
         # write_summary reads the whole CSV — never on the frame path.

@@ -65,6 +65,7 @@ class StrategyOptimizer:
     def __init__(self):
         self.last_changes = []
         self.games_seen = 0
+        self._pending_generation = False
         try:
             from optimizer.logger import Metrics
             StrategyOptimizer.GENERATION = int(Metrics.read_generation() or 0)
@@ -2171,9 +2172,9 @@ class StrategyOptimizer:
         self.last_changes = []
         try:
             from optimizer.logger import Metrics
-            StrategyOptimizer.GENERATION = Metrics.bump_generation()
+            StrategyOptimizer.GENERATION = int(Metrics.read_generation() or 0)
         except Exception:
-            StrategyOptimizer.GENERATION = int(getattr(StrategyOptimizer, 'GENERATION', 0) or 0) + 1
+            pass
         games = []
         try:
             games = self._load_games()
@@ -3537,7 +3538,8 @@ class StrategyOptimizer:
             _nudge_pool(combat[:3])
             _nudge_pool(stall_pool[:2])
             _nudge_pool(care[:1])
-        playbook.save_all_overlays()
+        written = playbook.save_all_overlays()
+        self._commit_new_generation(written)
         self._log_raw(
             'playbook strategy pass changes=%d wrote=%d eligible=%d dir0=%d strategies=%d skip=%d' % (
                 n_chg, n_chg, n_elig, n_dir0, len(playbook.list_ids()), len(skip)))
@@ -3696,6 +3698,21 @@ class StrategyOptimizer:
             self._log_raw('GP-EI skip no eligible cards')
         return done
 
+    def _commit_new_generation(self, written):
+        """Tick GEN only when a new strategy generation actually landed on disk."""
+        n = len(written or [])
+        if n <= 0 or not getattr(self, '_pending_generation', False):
+            return
+        try:
+            from optimizer.logger import Metrics
+            gen = Metrics.advance_generation(self)
+            self._log_raw('generation %d from %d files' % (gen, n))
+        except Exception as _ge:
+            try:
+                self._log_raw('generation bump failed: %s' % _ge)
+            except Exception:
+                pass
+
     def _persist_type_config(self, force=False):
         """Learned knobs go to strategies/types JSON — never type_config.py."""
         import time as _time
@@ -3716,6 +3733,7 @@ class StrategyOptimizer:
                 'timing persist=%.0fms files=%d force=%s sample=%s' % (
                     (_time.perf_counter() - t0) * 1000.0,
                     n, int(bool(force)), sample))
+            self._commit_new_generation(written)
             try:
                 from optimizer.perf import get_perf
                 get_perf(getattr(self, 'w', None)).end('persist')

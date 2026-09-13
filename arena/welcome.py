@@ -196,12 +196,20 @@ def draw_welcome(world, duration_ms=4400):
 
     feed = getattr(world, '_learn', None) or {}
     learning = feed.get('phase') in ('compute', 'show', 'persist')
+    stamp = getattr(world, '_stamp', None) or {}
+    stamp_line = 'BUILD %s   GEN %s   GAMES %s' % (
+        stamp.get('n', 0), stamp.get('gen', 0), stamp.get('games', 0))
+    stamp_s = font_tiny.render(stamp_line, True, (160, 175, 200))
+    if alpha < 255:
+        stamp_s = stamp_s.copy()
+        stamp_s.set_alpha(alpha)
+    world.screen.blit(stamp_s, stamp_s.get_rect(center=(cx, world.height - 18)))
     if not learning and int(el / 180) % 2 == 0:
         tip = font_flash.render("GET READY!", True, accent)
         if alpha < 255:
             tip = tip.copy()
             tip.set_alpha(alpha)
-        world.screen.blit(tip, tip.get_rect(center=(cx, world.height - 36)))
+        world.screen.blit(tip, tip.get_rect(center=(cx, world.height - 40)))
 
     draw_learn_panel(world, fade=fade, cache=cache)
 
