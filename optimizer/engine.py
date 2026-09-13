@@ -3549,7 +3549,8 @@ class StrategyOptimizer:
             _nudge_pool(stall_pool[:2])
             _nudge_pool(care[:1])
         written = playbook.save_all_overlays()
-        self._commit_new_generation(written)
+        if n_chg > 0:
+            self._commit_new_generation(written)
         self._log_raw(
             'playbook strategy pass changes=%d wrote=%d eligible=%d dir0=%d strategies=%d skip=%d' % (
                 n_chg, n_chg, n_elig, n_dir0, len(playbook.list_ids()), len(skip)))
@@ -3709,9 +3710,11 @@ class StrategyOptimizer:
         return done
 
     def _commit_new_generation(self, written):
-        """Tick GEN only when a new strategy generation actually landed on disk."""
+        """Tick GEN only when knobs actually moved, not a stats-only JSON flush."""
         n = len(written or [])
         if n <= 0 or not getattr(self, '_pending_generation', False):
+            return
+        if not (self.last_changes or []):
             return
         try:
             from optimizer.logger import Metrics
