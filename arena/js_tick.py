@@ -1454,11 +1454,7 @@ def collide(world, allow_convert=True):
             winner_p = a if a_eats else b
             if int(getattr(winner_p, '_eat_cd', 0) or 0) > 0:
                 continue
-            if types_alive > 2:
-                hx, hy = math.sin(winner_p.angle), -math.cos(winner_p.angle)
-                face = (hx * nx + hy * ny) if a_eats else (-hx * nx - hy * ny)
-                if face < 0.25:
-                    continue
+            # Struck by a predator converts. Facing does not save the prey.
             loser = b if a_eats else a
             lose_was = loser.type
             loser.type = winner_p.type

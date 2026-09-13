@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 46, gen: 457, games: 10372, at: "2026-09-13 20:37Z", sha: "770df81" };
+  const BUILD = { n: 47, gen: 462, games: 10392, at: "2026-09-13 20:47Z", sha: "86a1784" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1690,11 +1690,6 @@
           if (!allowConvert) continue;
           const winnerP = aEats ? a : b;
           if ((winnerP._eat_cd || 0) > 0) continue;
-          if (typesAlive > 2) {
-            const hx = Math.sin(winnerP.angle), hy = -Math.cos(winnerP.angle);
-            const face = aEats ? (hx * nx + hy * ny) : (-hx * nx - hy * ny);
-            if (face < 0.25) continue;
-          }
           const loser = aEats ? b : a;
           loser.type = winnerP.type;
           winnerP._eat_cd = eatCd;
