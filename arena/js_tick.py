@@ -576,30 +576,6 @@ def _fear_clump_steer(p, particles, prey_t, want):
     return around, False
 
 
-def _paper_never_into_scissors(p, want, fear_pool):
-    """Last veto: Paper want must not point at a nearby Scissors."""
-    if want is None or _tname(p) != 'PAPER':
-        return want
-    best, best_d2 = None, 1e18
-    cap = (p.size * 12.0) ** 2
-    for q in fear_pool or ():
-        if q is p:
-            continue
-        d2 = (q.x - p.x) ** 2 + (q.y - p.y) ** 2
-        if d2 < best_d2 and d2 <= cap:
-            best, best_d2 = q, d2
-    if best is None:
-        return want
-    d = math.sqrt(best_d2)
-    fear_h = heading_to(p.x, p.y, best.x, best.y)
-    if d < p.size * 6.0:
-        return ang_norm(fear_h + math.pi)
-    if abs(ang_diff(want, fear_h)) < 1.0:
-        sign = 1.0 if (_pid(p) % 2) else -1.0
-        return ang_norm(fear_h + sign * (math.pi * 0.5))
-    return want
-
-
 def _kite_prey_away_from_fear(p, prey, fear, loose=False):
     """If predator sits on the path to prey, go around — never through."""
     if prey is None or fear is None:
@@ -668,9 +644,7 @@ def apply_moves(want, steps, ctx):
         fear = fr if fr is not None else ctx.get('fear_obj')
     lst = list(steps or [])
     fear_n, prey_n = ctx.get('fearN', 0), ctx.get('preyN', 0)
-    tn = _tname(ctx.get('p'))
-    if (state == 'LAST_PREY_RISK' or (fear_n > 0 and prey_n <= 1) or fear_n >= 2
-            or (tn == 'PAPER' and fear_n >= 1)):
+    if state == 'LAST_PREY_RISK' or (fear_n > 0 and prey_n <= 1) or fear_n >= 2:
         lst = [s for s in lst if str((s or {}).get('fn') or '') not in CHASE_FNS]
     if state in ('CONTESTED', 'SMALL_UNIT'):
         lst = [s for s in lst if not str((s or {}).get('fn') or '').startswith('cover.')]
@@ -1294,17 +1268,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     })
     locked = getattr(p, '_locked', None)
     if state == 'CLEAR_HUNT' and locked is not None and locked in world.particles:
-        sc_close = False
-        if tn == 'PAPER':
-            lim2 = (p.size * 12.0) ** 2
-            for q in fear_pool or ():
-                dx, dy = q.x - p.x, q.y - p.y
-                if dx * dx + dy * dy <= lim2:
-                    sc_close = True
-                    break
-        if not sc_close:
-            want = hunt_heading(p, locked, look, tn, fear['d'] if fear else None)
-            mode = 'chase'
+        want = hunt_heading(p, locked, look, tn, fear['d'] if fear else None)
+        mode = 'chase'
     if fear_n > 0 and prey_n <= 1 and prey and prey.get('obj') is not None and prey['d'] < p.size * 4:
         want = safe_h
         mode = 'bias'
@@ -1363,8 +1328,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             near_n += 1
     if near_n >= 3:
         want = blend_headings(want, desync_heading(p, prey['obj'] if prey else None), 0.3)
-    if (fear and fear.get('obj') is not None and state != 'NEAR_WIPE'
-            and float(fear.get('d') or 1e9) < p.size * 6):
+    if mode == 'evade' and fear and fear['d'] < p.size * 6:
         ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y)))
         if ahead < 0.6:
             p.speed *= 0.72
@@ -1381,7 +1345,6 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             out = math.atan2(dx, -dy)
             ww = 0.92 if d < r + p.size * 1.8 else 0.5
             want = blend_headings(blend_headings(want, tang, ww), out, 0.28)
-    want = _paper_never_into_scissors(p, want, fear_pool)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))

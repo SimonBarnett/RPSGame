@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 44, gen: 441, games: 10302, at: "2026-09-13 20:07Z", sha: "9c0684a" };
+  const BUILD = { n: 45, gen: 455, games: 10368, at: "2026-09-13 20:34Z", sha: "7edc97f" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1029,8 +1029,7 @@
     const prey = ctx.prey && ctx.prey.obj, fear = ctx.fear && ctx.fear.obj;
     let list = (steps || []).slice();
     const CHASE_FNS = { 'time.heading': 1, 'time.eta': 1, 'intercept.heading': 1, 'intercept.lead': 1, 'intercept.chord': 1, 'lanes.heading': 1 };
-    if (state === 'LAST_PREY_RISK' || (ctx.fearN > 0 && ctx.preyN <= 1) || ctx.fearN >= 2
-        || (p && p.type === 'PAPER' && ctx.fearN >= 1)) {
+    if (state === 'LAST_PREY_RISK' || (ctx.fearN > 0 && ctx.preyN <= 1) || ctx.fearN >= 2) {
       list = list.filter(function (s) { return !CHASE_FNS[String((s || {}).fn || '')]; });
     }
     if (state === 'CONTESTED' || state === 'SMALL_UNIT') {
@@ -1573,21 +1572,8 @@
         look: look, fearN: fearN, preyN: preyN, allies: allies, preys: preys
       });
       if (state === 'CLEAR_HUNT' && p._locked && particles.indexOf(p._locked) >= 0) {
-        let scClose = false;
-        if (p.type === 'PAPER') {
-          const lim2 = (p.size * 12) * (p.size * 12);
-          const fearT = FEAR[p.type];
-          for (let i = 0; i < particles.length; i++) {
-            const q = particles[i];
-            if (q.type !== fearT) continue;
-            const dx = q.x - p.x, dy = q.y - p.y;
-            if (dx * dx + dy * dy <= lim2) { scClose = true; break; }
-          }
-        }
-        if (!scClose) {
-          want = huntHeading(p, p._locked, look, fear && fear.d);
-          mode = 'chase';
-        }
+        want = huntHeading(p, p._locked, look, fear && fear.d);
+        mode = 'chase';
       }
       // Python last-prey: steer OFF the meal while predators live. Nothing else may overwrite this.
       if (fearN > 0 && preyN <= 1 && prey && prey.obj && prey.d < p.size * 4) {
@@ -1637,7 +1623,7 @@
       if (nearN >= 3) want = blendHeadings(want, desyncHeading(p, prey && prey.obj), 0.3);
 
       // evasion brake / reverse (Python apply_evasion, compact)
-      if (fear && fear.obj && state !== 'NEAR_WIPE' && fear.d < p.size * 6) {
+      if (mode === 'evade' && fear && fear.d < p.size * 6) {
         const ahead = Math.abs(angDiff(p.angle, headingTo(p.x, p.y, fear.obj.x, fear.obj.y)));
         if (ahead < 0.6) p.speed *= 0.72;
       }
@@ -1657,7 +1643,6 @@
         }
       }
 
-      want = paperNeverIntoScissors(p, want);
       if (want != null) {
         const dlt = angDiff(p.angle, want);
         p.angle = angNorm(p.angle + Math.max(-maxTurn, Math.min(maxTurn, dlt)));
@@ -1719,28 +1704,6 @@
           if (opts.onSfx) opts.onSfx('collide');
         }
       }
-    }
-
-    function paperNeverIntoScissors(p, want) {
-      if (want == null || p.type !== 'PAPER') return want;
-      const fearT = FEAR[p.type];
-      let best = null, bestD2 = 1e18;
-      const cap = (p.size * 12) * (p.size * 12);
-      for (let i = 0; i < particles.length; i++) {
-        const q = particles[i];
-        if (q === p || q.type !== fearT) continue;
-        const d2 = (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y);
-        if (d2 < bestD2 && d2 <= cap) { bestD2 = d2; best = q; }
-      }
-      if (!best) return want;
-      const d = Math.sqrt(bestD2);
-      const fearH = headingTo(p.x, p.y, best.x, best.y);
-      if (d < p.size * 6) return angNorm(fearH + Math.PI);
-      if (Math.abs(angDiff(want, fearH)) < 1.0) {
-        const sign = (p.id % 2) ? 1 : -1;
-        return angNorm(fearH + sign * (Math.PI * 0.5));
-      }
-      return want;
     }
 
     function kitePreyAwayFromFear(p, prey, fear, loose) {
