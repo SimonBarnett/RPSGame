@@ -577,44 +577,51 @@ def _fear_clump_steer(p, particles, prey_t, want):
 
 
 def _paper_never_into_scissors(p, want, fear_pool, prey=None):
-    """Paper last-heading veto: never fly at a Scissors pack; hunt around to far-side of Rock."""
+    """Paper last-heading veto: never ram the pack; hunt beside it to far-side of Rock."""
     if want is None or _tname(p) != 'PAPER':
         return want
     best, best_d2 = None, 1e18
     cap = (p.size * 14.0) ** 2
-    near = []
     sx = sy = 0.0
+    n = 0
     for q in fear_pool or ():
         if q is p:
             continue
         d2 = (q.x - p.x) ** 2 + (q.y - p.y) ** 2
         if d2 > cap:
             continue
-        near.append(q)
         sx += q.x
         sy += q.y
+        n += 1
         if d2 < best_d2:
             best, best_d2 = q, d2
     if best is None:
         return want
-    n = len(near)
     cx, cy = sx / n, sy / n
     pack_r = p.size
-    for q in near:
+    for q in fear_pool or ():
+        if q is p:
+            continue
+        d2 = (q.x - p.x) ** 2 + (q.y - p.y) ** 2
+        if d2 > cap:
+            continue
         pr = math.hypot(q.x - cx, q.y - cy) + (getattr(q, 'size', None) or p.size)
         if pr > pack_r:
             pack_r = pr
     near_h = heading_to(p.x, p.y, best.x, best.y)
     pack_h = heading_to(p.x, p.y, cx, cy)
+    d_near = math.sqrt(best_d2)
+    d_pack = math.hypot(p.x - cx, p.y - cy)
 
-    def _hits(h):
-        for q in near:
-            if abs(ang_diff(h, heading_to(p.x, p.y, q.x, q.y))) < 1.05:
-                return True
+    def _ram(h):
+        if d_pack < pack_r + p.size * 10.0 and abs(ang_diff(h, pack_h)) < 1.00:
+            return True
+        if d_near < p.size * 8.0 and abs(ang_diff(h, near_h)) < 0.90:
+            return True
         return False
 
     if prey is None:
-        if best_d2 < (p.size * 6.0) ** 2 or _hits(want):
+        if d_near < p.size * 6.0 or _ram(want):
             return ang_norm(near_h + math.pi)
         return want
     fx, fy = prey.x - cx, prey.y - cy
@@ -622,26 +629,21 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     gx = prey.x + fx / fl * (pack_r + p.size * 8.0)
     gy = prey.y + fy / fl * (pack_r + p.size * 8.0)
     to_goal = heading_to(p.x, p.y, gx, gy)
-    if not _hits(to_goal):
+    if not _ram(to_goal):
         return to_goal
     px, py = -(cy - p.y), cx - p.x
     if px * (gx - p.x) + py * (gy - p.y) < 0:
         px, py = -px, -py
     pl = math.hypot(px, py) or 1.0
-    along = pack_r + p.size * 6.0
-    clear = pack_r + p.size * 10.0
-    wrap = heading_to(
-        p.x, p.y,
-        cx + px / pl * clear + fx / fl * along,
-        cy + py / pl * clear + fy / fl * along)
-    if not _hits(wrap):
-        return wrap
-    d_pack = math.hypot(p.x - cx, p.y - cy)
-    min_off = max(1.20, math.atan2(pack_r + p.size * 4.0, max(d_pack, p.size)))
+    clear = pack_r + p.size * 8.0
+    side = heading_to(p.x, p.y, cx + px / pl * clear, cy + py / pl * clear)
+    if not _ram(side):
+        return side
+    min_off = max(1.15, math.atan2(pack_r + p.size * 6.0, max(d_pack, p.size)))
     left = ang_norm(pack_h + min_off)
     right = ang_norm(pack_h - min_off)
     h = left if abs(ang_diff(left, to_goal)) <= abs(ang_diff(right, to_goal)) else right
-    if not _hits(h):
+    if not _ram(h):
         return h
     return ang_norm(near_h + math.pi)
 

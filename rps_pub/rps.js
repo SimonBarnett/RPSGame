@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 51, gen: 510, games: 10518, at: "2026-09-13 22:05Z", sha: "6eeb176" };
+  const BUILD = { n: 52, gen: 524, games: 10567, at: "2026-09-13 22:33Z", sha: "8b89408" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1708,35 +1708,36 @@
       const fearT = FEAR[p.type];
       const cap = (p.size * 14) * (p.size * 14);
       let best = null, bestD2 = 1e18, sx = 0, sy = 0, n = 0;
-      const near = [];
       for (let i = 0; i < particles.length; i++) {
         const q = particles[i];
         if (q === p || q.type !== fearT) continue;
         const d2 = (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y);
         if (d2 > cap) continue;
-        near.push(q);
         sx += q.x; sy += q.y; n++;
         if (d2 < bestD2) { bestD2 = d2; best = q; }
       }
       if (!best) return want;
       const cx = sx / n, cy = sy / n;
       let packR = p.size;
-      for (let i = 0; i < near.length; i++) {
-        const q = near[i];
+      for (let i = 0; i < particles.length; i++) {
+        const q = particles[i];
+        if (q === p || q.type !== fearT) continue;
+        const d2 = (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y);
+        if (d2 > cap) continue;
         const pr = Math.hypot(q.x - cx, q.y - cy) + (q.size || p.size);
         if (pr > packR) packR = pr;
       }
       const nearH = headingTo(p.x, p.y, best.x, best.y);
       const packH = headingTo(p.x, p.y, cx, cy);
-      const blocked = function (h) {
-        for (let i = 0; i < near.length; i++) {
-          const q = near[i];
-          if (Math.abs(angDiff(h, headingTo(p.x, p.y, q.x, q.y))) < 1.05) return true;
-        }
+      const dNear = Math.sqrt(bestD2);
+      const dPack = Math.hypot(p.x - cx, p.y - cy);
+      const ram = function (h) {
+        if (dPack < packR + p.size * 10 && Math.abs(angDiff(h, packH)) < 1.00) return true;
+        if (dNear < p.size * 8 && Math.abs(angDiff(h, nearH)) < 0.90) return true;
         return false;
       };
       if (!prey) {
-        if (bestD2 < (p.size * 6) * (p.size * 6) || blocked(want)) return angNorm(nearH + Math.PI);
+        if (dNear < p.size * 6 || ram(want)) return angNorm(nearH + Math.PI);
         return want;
       }
       const fx = prey.x - cx, fy = prey.y - cy;
@@ -1744,24 +1745,18 @@
       const gx = prey.x + fx / fl * (packR + p.size * 8);
       const gy = prey.y + fy / fl * (packR + p.size * 8);
       const toGoal = headingTo(p.x, p.y, gx, gy);
-      if (!blocked(toGoal)) return toGoal;
+      if (!ram(toGoal)) return toGoal;
       let px = -(cy - p.y), py = cx - p.x;
       if (px * (gx - p.x) + py * (gy - p.y) < 0) { px = -px; py = -py; }
       const pl = Math.hypot(px, py) || 1;
-      const along = packR + p.size * 6;
-      const clear = packR + p.size * 10;
-      const wrap = headingTo(
-        p.x, p.y,
-        cx + px / pl * clear + fx / fl * along,
-        cy + py / pl * clear + fy / fl * along
-      );
-      if (!blocked(wrap)) return wrap;
-      const dPack = Math.hypot(p.x - cx, p.y - cy);
-      const minOff = Math.max(1.20, Math.atan2(packR + p.size * 4, Math.max(dPack, p.size)));
+      const clear = packR + p.size * 8;
+      const side = headingTo(p.x, p.y, cx + px / pl * clear, cy + py / pl * clear);
+      if (!ram(side)) return side;
+      const minOff = Math.max(1.15, Math.atan2(packR + p.size * 6, Math.max(dPack, p.size)));
       const left = angNorm(packH + minOff);
       const right = angNorm(packH - minOff);
       const h = Math.abs(angDiff(left, toGoal)) <= Math.abs(angDiff(right, toGoal)) ? left : right;
-      if (!blocked(h)) return h;
+      if (!ram(h)) return h;
       return angNorm(nearH + Math.PI);
     }
 
