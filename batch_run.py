@@ -87,9 +87,11 @@ for i in range(N):
     except Exception as e:
         print('  optimise', e)
     gen, games = Metrics.ensure_learn_counters(gen0, games0, w.optimizer)
-    print('  learn gen=%s games=%s changes=%d  %.2fs' % (
+    need = int(getattr(w.optimizer, 'MIN_GENERATION_CHANGES', 8) or 8)
+    have = len(getattr(w.optimizer, '_gen_change_acc', None) or [])
+    print('  learn gen=%s games=%s changes=%d knobs=%d/%d  %.2fs' % (
         gen, games,
         len(getattr(w.optimizer, 'last_changes', []) or []),
-        time.time() - l0))
+        have, need, time.time() - l0))
 dt = time.time() - t0
 print('done in %.1fs  (%.2fs/game)  wins=%s' % (dt, dt / max(1, N), wins))

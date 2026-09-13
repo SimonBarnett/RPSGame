@@ -148,9 +148,12 @@ def learn(n=None):
         except Exception as e:
             print('  optimise', e, flush=True)
         gen, games = Metrics.ensure_learn_counters(gen0, games0, w.optimizer)
-        print('  learn gen=%s games=%s changes=%d' % (
+        need = int(getattr(w.optimizer, 'MIN_GENERATION_CHANGES', 8) or 8)
+        have = len(getattr(w.optimizer, '_gen_change_acc', None) or [])
+        print('  learn gen=%s games=%s changes=%d knobs=%d/%d' % (
             gen, games,
-            len(getattr(w.optimizer, 'last_changes', []) or [])), flush=True)
+            len(getattr(w.optimizer, 'last_changes', []) or []),
+            have, need), flush=True)
     except KeyboardInterrupt:
         print('\nstopped after %d games' % i, flush=True)
     try:

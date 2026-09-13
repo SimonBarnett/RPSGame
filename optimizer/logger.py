@@ -35,6 +35,7 @@ class Metrics:
     SUMMARY = log_path('metrics_summary.txt')
     TOTAL_FILE = log_path('games_total.txt')
     GEN_FILE = log_path('generation.txt')
+    GEN_PENDING_FILE = log_path('generation_pending.txt')
 
     @classmethod
     def read_games_total(cls):
@@ -101,6 +102,40 @@ class Metrics:
     def bump_generation(cls):
         """Disk is source of truth so a new process cannot reset GEN to 0."""
         return cls.write_generation(cls.read_generation() + 1)
+
+    @classmethod
+    def read_generation_pending(cls):
+        keys = []
+        try:
+            with open(cls.GEN_PENDING_FILE, encoding='utf-8') as f:
+                keys = [ln.strip() for ln in f if ln.strip()]
+        except Exception:
+            keys = []
+        return keys
+
+    @classmethod
+    def write_generation_pending(cls, keys):
+        uniq = []
+        seen = set()
+        for k in keys or []:
+            k = str(k).strip()
+            if not k or k in seen:
+                continue
+            seen.add(k)
+            uniq.append(k)
+        text = ('\n'.join(uniq) + '\n') if uniq else ''
+        tmp = cls.GEN_PENDING_FILE + '.tmp'
+        try:
+            with open(tmp, 'w', encoding='utf-8') as f:
+                f.write(text)
+            os.replace(tmp, cls.GEN_PENDING_FILE)
+        except Exception:
+            try:
+                with open(cls.GEN_PENDING_FILE, 'w', encoding='utf-8') as f:
+                    f.write(text)
+            except Exception:
+                pass
+        return uniq
 
     @classmethod
     def welcome_stamp(cls):

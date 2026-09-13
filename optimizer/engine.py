@@ -66,10 +66,12 @@ class StrategyOptimizer:
         self.last_changes = []
         self.games_seen = 0
         self._pending_generation = False
+        self._gen_change_acc = set()
         try:
             from optimizer.logger import Metrics
             StrategyOptimizer.GENERATION = int(Metrics.read_generation() or 0)
             self.games_seen = int(Metrics.read_games_total() or 0)
+            self._gen_change_acc = set(Metrics.read_generation_pending() or [])
         except Exception:
             pass
         self._ga_pop = None          # legacy type-wide (unused)
@@ -416,6 +418,7 @@ class StrategyOptimizer:
     BOUND_CONTRACT = 0.01
     BOUND_MAX_SPAN_MULT = 2.5    # never expand beyond 2.5x original span from HARD floors
     GENERATION = 0
+    MIN_GENERATION_CHANGES = 8   # distinct knobs before GEN ticks — not 1–2 tunes
     # Evolutionary noise: small trait mutation each generation (EGT exploration)
     MUTATION_RATE = 0.12         # fraction of STRATEGY_KEYS mutated per type per pass
     MUTATION_STRENGTH = 0.35     # relative to bound step (keep << selection strength)
@@ -3549,8 +3552,6 @@ class StrategyOptimizer:
             _nudge_pool(stall_pool[:2])
             _nudge_pool(care[:1])
         written = playbook.save_all_overlays()
-        if n_chg > 0:
-            self._commit_new_generation(written)
         self._log_raw(
             'playbook strategy pass changes=%d wrote=%d eligible=%d dir0=%d strategies=%d skip=%d' % (
                 n_chg, n_chg, n_elig, n_dir0, len(playbook.list_ids()), len(skip)))
@@ -3709,17 +3710,51 @@ class StrategyOptimizer:
             self._log_raw('GP-EI skip no eligible cards')
         return done
 
+    @staticmethod
+    def _change_key(line):
+        s = str(line or '').strip()
+        if not s:
+            return ''
+        if ' -> ' in s:
+            s = s.split(' -> ', 1)[0]
+        s = s.split('  (', 1)[0].strip()
+        return s
+
     def _commit_new_generation(self, written):
-        """Tick GEN only when knobs actually moved, not a stats-only JSON flush."""
+        """Tick GEN when enough distinct knobs have moved since the last generation."""
         n = len(written or [])
-        if n <= 0 or not getattr(self, '_pending_generation', False):
+        if not getattr(self, '_pending_generation', False):
             return
-        if not (self.last_changes or []):
+        acc = set(getattr(self, '_gen_change_acc', None) or [])
+        new_n = 0
+        for line in (self.last_changes or []):
+            k = self._change_key(line)
+            if k and k not in acc:
+                acc.add(k)
+                new_n += 1
+        if new_n <= 0:
+            return
+        self._gen_change_acc = acc
+        need = max(1, int(getattr(self, 'MIN_GENERATION_CHANGES', 8)))
+        try:
+            from optimizer.logger import Metrics
+            Metrics.write_generation_pending(sorted(acc))
+        except Exception:
+            pass
+        if len(acc) < need:
+            try:
+                self._log_raw(
+                    'generation pending %d/%d knobs files=%d' % (len(acc), need, n))
+            except Exception:
+                pass
             return
         try:
             from optimizer.logger import Metrics
             gen = Metrics.advance_generation(self)
-            self._log_raw('generation %d from %d files' % (gen, n))
+            self._gen_change_acc = set()
+            Metrics.write_generation_pending([])
+            self._log_raw(
+                'generation %d from %d knobs %d files' % (gen, len(acc), n))
         except Exception as _ge:
             try:
                 self._log_raw('generation bump failed: %s' % _ge)
