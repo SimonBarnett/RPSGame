@@ -331,6 +331,36 @@ def _sync_play_motion(ident):
         pass
 
 
+def lock(ident, log=None, games_seen=0):
+    """One-shot write of a frozen triangle. Does not enable the balancer."""
+    ident = _clamp_triangle(ident)
+    _write_config(ident)
+    _sync_runtime(ident)
+    _sync_play_motion(ident)
+    seeded = _seed_overlay_files(ident)
+    try:
+        os.makedirs(METRICS, exist_ok=True)
+        rec = {
+            "shares": {},
+            "n": 0,
+            "games_seen": int(games_seen or 0),
+            "identity": ident,
+            "changes": ["locked frozen triangle"],
+            "overlays_seeded": seeded,
+            "frozen": True,
+        }
+        with open(STATE, "w", encoding="utf-8") as f:
+            json.dump(rec, f, indent=2)
+    except Exception:
+        pass
+    if log:
+        try:
+            log("motion lock seeded=%d %s" % (seeded, ident))
+        except Exception:
+            pass
+    return ident, seeded
+
+
 def apply(log=None, games_seen=0, force=False):
     """One constrained motion step. Returns list of change strings."""
     if FROZEN:

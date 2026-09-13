@@ -2386,6 +2386,12 @@ class StrategyOptimizer:
             self._log_raw(f'optimise nudges failed: {e}\n{traceback.format_exc()}')
 
         self._log_changes(sample, wins, avg_dur)
+        try:
+            n_m = self._match_cycle_nudge(getattr(self, '_last_match_A', None))
+            if n_m:
+                self._log_raw('match-cycle nudges=%d' % n_m)
+        except Exception as _mce:
+            self._log_raw('match-cycle nudge failed: %s' % _mce)
         # Dirty-only persist. force=True rewrites 90+ JSON files and is the
         # 0.7–1.3s persist spike. Full rewrite only every 40 games.
         # Motion triangle is frozen — optimizer.motion.FROZEN.
@@ -3587,6 +3593,32 @@ class StrategyOptimizer:
                 n_rec, int(getattr(bo, 'LAST_MIGRATE', 0) or 0)))
             bo.LAST_MIGRATE = 0
 
+    def _match_cycle_nudge(self, A):
+        """Nudge kite/hunt knobs from match A (not conversion tautology). No duration."""
+        if not A:
+            return 0
+        import strategies.playbook as playbook
+        n = 0
+        sp = float((A.get('SCISSORS') or {}).get('PAPER') or 0)
+        rs = float((A.get('ROCK') or {}).get('SCISSORS') or 0)
+        if sp > 0.15:
+            for sid in ('OPEN_KITE', 'FORT_KITE', 'ORBIT_KITE', 'SURVIVE_FEAR', 'SCREEN_HUNT'):
+                for path in ('escape_bonus', 'fort_cover_weight', 'avoid_weight'):
+                    if playbook.nudge_tunable('PAPER', sid, path, +1, strength=0.65):
+                        n += 1
+                        self.last_changes.append('PAPER.%s.%s match-S>P' % (sid, path))
+            for sid in ('PACK_HUNT', 'CLEAR_SPLIT'):
+                if playbook.nudge_tunable('SCISSORS', sid, 'near_target_aggro', -1, strength=0.4):
+                    n += 1
+                    self.last_changes.append('SCISSORS.%s.near_target_aggro match-S>P' % sid)
+        if rs < -0.15:
+            for sid in ('PACK_HUNT', 'CLEAR_SPLIT', 'SCREEN_HUNT'):
+                for path in ('near_target_aggro', 'pack_hunt_mult'):
+                    if playbook.nudge_tunable('ROCK', sid, path, +1, strength=0.65):
+                        n += 1
+                        self.last_changes.append('ROCK.%s.%s match-R>S' % (sid, path))
+        return n
+
     def _is_combat_card(self, sid, ov):
         if sid in self._CARE_SIDS:
             return False
@@ -3630,10 +3662,24 @@ class StrategyOptimizer:
             picked = []
             seen = set()
             if tname in explore and rescue:
-                sid, ov = rescue[0][1], rescue[0][2]
-                picked.append((sid, ov))
-                seen.add(sid)
-                self._log_raw('GP-EI rescue %s.%s y=%.3f' % (tname, sid, rescue[0][0]))
+                dead = getattr(self, '_gp_dead', None) or {}
+                chosen = None
+                for y, sid, ov in rescue:
+                    key = (tname, sid)
+                    if int(dead.get(key, 0) or 0) >= 3 and float(y) < -1.5:
+                        self._log_raw('GP-EI skip dead %s.%s y=%.3f' % (tname, sid, y))
+                        continue
+                    chosen = (y, sid, ov)
+                    break
+                if chosen:
+                    y, sid, ov = chosen
+                    key = (tname, sid)
+                    picked.append((sid, ov))
+                    seen.add(sid)
+                    self._log_raw('GP-EI rescue %s.%s y=%.3f' % (tname, sid, y))
+                    if float(y) < -1.5:
+                        dead[key] = int(dead.get(key, 0) or 0) + 1
+                        self._gp_dead = dead
             if tname in explore:
                 hunt_best = None
                 hunt_wr = -1.0

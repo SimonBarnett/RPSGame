@@ -1,11 +1,7 @@
 {
-  "shares": {
-    "ROCK": 0.3,
-    "PAPER": 0.075,
-    "SCISSORS": 0.625
-  },
-  "n": 40,
-  "games_seen": 9400,
+  "shares": {},
+  "n": 0,
+  "games_seen": 9862,
   "identity": {
     "ROCK": {
       "speed_base": 1.08,
@@ -21,10 +17,8 @@
     }
   },
   "changes": [
-    "ROCK.speed_base: 1.101 -> 1.080  (motion-balance share=0.300)",
-    "ROCK.turn_base: 16.20 -> 16.20  (motion-balance share=0.300)",
-    "SCISSORS.speed_base: 1.181 -> 1.180  (motion-balance share=0.625)",
-    "SCISSORS.turn_base: 14.15 -> 14.15  (motion-balance share=0.625)"
+    "locked frozen triangle"
   ],
-  "overlays_seeded": 96
+  "overlays_seeded": 144,
+  "frozen": true
 }
