@@ -289,28 +289,29 @@ def apply_vector(overlay, vec, tunables):
 
 
 def payoff(overlay, type_name=None, sid=None, state=None):
-    """Decision score for one game state — never pooled global αβ."""
+    """Decision score for one game state — never pooled global αβ.
+
+    When state is omitted, use the card's primary when.states[0] if that
+    slot has n>=8. Do not pick max-n across CONTESTED + LAST_MAN.
+    """
     st = (overlay or {}).get('stats') or {}
     bys = st.get('by_state') or {}
+    if not isinstance(bys, dict):
+        bys = {}
     slot = {}
-    if state and state in bys:
-        slot = bys.get(state) or {}
-    elif bys:
-        slot = max(bys.values(), key=lambda v: float((v or {}).get('n') or 0)) if bys else {}
-        if not isinstance(slot, dict):
-            slot = {}
-        if float(slot.get('n') or 0) < 8:
-            slot = {}
+    if not state:
+        states = list(((overlay or {}).get('when') or {}).get('states') or [])
+        if states:
+            state = str(states[0] or '').upper()
+    if state:
+        cand = bys.get(state) or {}
+        if isinstance(cand, dict) and float(cand.get('n') or 0) >= 8:
+            slot = cand
     games = max(1.0, float(slot.get('n') or st.get('games') or 1.0))
     bl = min(1.0, float(st.get('last_prey_blunder') or 0.0) / games)
-    if slot:
-        a = float(slot.get('alpha') or 1.0)
-        b = float(slot.get('beta') or 1.0)
-        th = a / max(1e-6, a + b)
-        ema = float(slot.get('ema') or 0.0)
-        return 0.50 * th + 0.30 * ema - 3.2 * bl
-    a = float(st.get('alpha') or 1.0)
-    b = float(st.get('beta') or 1.0)
+    src = slot if slot else st
+    a = float(src.get('alpha') or 1.0)
+    b = float(src.get('beta') or 1.0)
     th = a / max(1e-6, a + b)
-    ema = float(st.get('ema') or 0.0)
+    ema = max(-1.0, min(1.0, float(src.get('ema') or 0.0)))
     return 0.50 * th + 0.30 * ema - 3.2 * bl

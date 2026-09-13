@@ -3657,6 +3657,42 @@ class StrategyOptimizer:
             'CHOKE_PINCH', 'DENSITY_RAID', 'ETA_STRIKE', 'BODY_CHECK',
         )
 
+    def _load_gp_dead(self):
+        if getattr(self, '_gp_dead_loaded', False):
+            return getattr(self, '_gp_dead', None) or {}
+        dead = {}
+        try:
+            import json
+            raw = json.load(open(log_path('gp_dead.json'), encoding='utf-8'))
+            if isinstance(raw, dict):
+                for k, v in raw.items():
+                    k = str(k)
+                    if '.' not in k:
+                        continue
+                    t, s = k.split('.', 1)
+                    dead[(t, s)] = int(v or 0)
+        except Exception:
+            dead = {}
+        self._gp_dead = dead
+        self._gp_dead_loaded = True
+        return dead
+
+    def _save_gp_dead(self):
+        try:
+            import json
+            dead = getattr(self, '_gp_dead', None) or {}
+            bag = {}
+            for key, n in dead.items():
+                if isinstance(key, tuple) and len(key) == 2:
+                    bag['%s.%s' % key] = int(n or 0)
+            path = log_path('gp_dead.json')
+            tmp = path + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(bag, f)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+
     def _bo_ei_step(self):
         """EI on a few played cards only. Returns set of (type, sid) written."""
         import strategies.playbook as playbook
@@ -3667,6 +3703,8 @@ class StrategyOptimizer:
         done = set()
         skips = []
         max_per = int(getattr(self, 'BO_MAX_PER_TYPE', 2))
+        dead = self._load_gp_dead()
+        dead_dirty = False
         for tname in ('ROCK', 'PAPER', 'SCISSORS'):
             bag = playbook.TEAM_OVERLAYS.get(tname) or {}
             used = ticks_all.get(tname) or {}
@@ -3687,24 +3725,23 @@ class StrategyOptimizer:
             picked = []
             seen = set()
             if tname in explore and rescue:
-                dead = getattr(self, '_gp_dead', None) or {}
                 chosen = None
                 for y, sid, ov in rescue:
                     key = (tname, sid)
-                    if int(dead.get(key, 0) or 0) >= 3 and float(y) < -1.5:
+                    # y<-1.5 is already dead — do not wait for 3 in-memory strikes
+                    if float(y) < -1.5 or int(dead.get(key, 0) or 0) >= 3:
                         self._log_raw('GP-EI skip dead %s.%s y=%.3f' % (tname, sid, y))
+                        if int(dead.get(key, 0) or 0) < 3:
+                            dead[key] = 3
+                            dead_dirty = True
                         continue
                     chosen = (y, sid, ov)
                     break
                 if chosen:
                     y, sid, ov = chosen
-                    key = (tname, sid)
                     picked.append((sid, ov))
                     seen.add(sid)
                     self._log_raw('GP-EI rescue %s.%s y=%.3f' % (tname, sid, y))
-                    if float(y) < -1.5:
-                        dead[key] = int(dead.get(key, 0) or 0) + 1
-                        self._gp_dead = dead
             if tname in explore:
                 hunt_best = None
                 hunt_wr = -1.0
@@ -3730,8 +3767,14 @@ class StrategyOptimizer:
                 if len(picked) >= max_per:
                     break
             if tname in explore and len(picked) < max_per:
-                for _, sid, ov in rescue:
+                for y, sid, ov in rescue:
                     if sid in seen:
+                        continue
+                    key = (tname, sid)
+                    if float(y) < -1.5 or int(dead.get(key, 0) or 0) >= 3:
+                        if int(dead.get(key, 0) or 0) < 3:
+                            dead[key] = 3
+                            dead_dirty = True
                         continue
                     picked.append((sid, ov))
                     seen.add(sid)
@@ -3763,6 +3806,9 @@ class StrategyOptimizer:
                     moved.append('ei')
                 done.add((tname, sid))
                 self.last_changes.append('%s.%s GP-EI %s' % (tname, sid, ', '.join(moved[:3])))
+        if dead_dirty:
+            self._gp_dead = dead
+            self._save_gp_dead()
         if done:
             playbook.save_all_overlays()
         elif skips:
