@@ -93,7 +93,7 @@ def _disk_overlay(ov, for_js=False):
     out = dict(ov)
     out.pop('last_changes', None)
     if for_js:
-        out['when'] = _apply_when_floors(out.get('id'), out.get('when'))
+        out['when'] = _apply_when_floors(out.get('id'), out.get('when'), out.get('type'))
         st = dict(out.get('stats') or {})
         bys = {}
         for k, v in (st.get('by_state') or {}).items():
@@ -206,7 +206,7 @@ def merge_template(overlay, template):
                 ow[k] = int(tw[k]) if k not in ow else max(int(ow[k]), int(tw[k]))
             except Exception:
                 ow[k] = tw[k]
-    ow = _apply_when_floors(sid, ow)
+    ow = _apply_when_floors(sid, ow, out.get('type'))
     out['when'] = ow
     ot = list(out.get('tactics') or [])
     for tid in tmpl.get('tactics') or []:
@@ -386,7 +386,7 @@ def spec_for(type_name, strategy_id):
     tmpl = STRATEGIES.get(strategy_id) or {}
     ov = (TEAM_OVERLAYS.get(type_name) or {}).get(strategy_id) or {}
     out = _merge(tmpl, ov)
-    out['when'] = _apply_when_floors(strategy_id, out.get('when'))
+    out['when'] = _apply_when_floors(strategy_id, out.get('when'), type_name)
     _SPEC_CACHE[key] = out
     return out
 
@@ -476,13 +476,18 @@ WHEN_FLOORS = {
     'CLEAR_SPLIT': {'min_self': 4},
     'SCREEN_HUNT': {'min_self': 3},
 }
+WHEN_FLOORS_TYPE = {
+    ('SCISSORS', 'PACK_HUNT'): {'min_self': 6},
+    ('SCISSORS', 'CHOKE_PINCH'): {'min_self': 6},
+}
 WHEN_GATES = ('min_self', 'max_self', 'min_fear', 'max_fear',
               'min_prey', 'max_prey', 'min_team', 'max_team')
 
 
-def _apply_when_floors(sid, when):
+def _apply_when_floors(sid, when, type_name=None):
     out = dict(when or {})
-    fl = WHEN_FLOORS.get(sid) or {}
+    fl = dict(WHEN_FLOORS.get(sid) or {})
+    fl.update(WHEN_FLOORS_TYPE.get((type_name, sid)) or {})
     for k, v in fl.items():
         try:
             cur = int(out[k]) if k in out else v

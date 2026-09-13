@@ -1382,7 +1382,7 @@ def _unstick_friends(particles):
 def collide(world, allow_convert=True):
     particles = world.particles
     types_alive = len({_tname(p) for p in particles})
-    eat_cd = 4 if types_alive <= 2 else 11
+    eat_cd = 7 if types_alive <= 2 else 11
     for p in particles:
         cd = int(getattr(p, '_eat_cd', 0) or 0)
         if cd > 0:

@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 37, gen: 331, games: 10049, at: "2026-09-13 17:48Z", sha: "5cb2be7" };
+  const BUILD = { n: 38, gen: 335, games: 10056, at: "2026-09-13 17:56Z", sha: "46f1f79" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1665,7 +1665,7 @@
       if (allowConvert == null) allowConvert = true;
       const cNow = counts();
       const typesAlive = (cNow.ROCK > 0 ? 1 : 0) + (cNow.PAPER > 0 ? 1 : 0) + (cNow.SCISSORS > 0 ? 1 : 0);
-      const eatCd = typesAlive <= 2 ? 4 : 11;
+      const eatCd = typesAlive <= 2 ? 7 : 11;
       for (let k = 0; k < particles.length; k++) {
         if (particles[k]._eat_cd > 0) particles[k]._eat_cd--;
       }
