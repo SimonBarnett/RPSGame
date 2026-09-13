@@ -130,17 +130,19 @@ def _state_occupancy(state_ticks, type_name):
 
 
 def episode_return(type_name, winner, duration_s, wipe_by_type,
-                   endgame_s=0.0, endgame_hunter=None, state_ticks=None):
+                   endgame_s=0.0, endgame_hunter=None, state_ticks=None,
+                   n_conv=0, team_size=8):
     """Scalar G for this type this match."""
     dur = _num(duration_s)
-    eg = _num(endgame_s)
     won = 1.0 if str(winner or '').upper() == type_name else 0.0
     wiped = _num((wipe_by_type or {}).get(type_name, 0)) > 0
     sc = _dur_scale()
     wipe_short = 22.0 * sc
+    scale = float(max(6, int(team_size or 8)))
 
-    # Win is always good. Do not score duration — that trains stalling.
+    # Win is always good. Duration is not a score. Wars (many tags) are.
     G = 1.15 * won
+    G += 0.40 * math.tanh((_num(n_conv) - scale) / scale)
 
     # Last-meal discipline: popping the last prey while a predator lives
     # is a blunder, not a faster win.
@@ -159,7 +161,8 @@ def episode_return(type_name, winner, duration_s, wipe_by_type,
 
 
 def settle_game(winner, duration_s, wipe_by_type, state_ticks=None,
-                endgame_s=0.0, endgame_hunter=None, ticks=None):
+                endgame_s=0.0, endgame_hunter=None, ticks=None,
+                n_conv=0, team_size=8):
     _load()
     # Seed first-visits from occupancy if Team.update never called remember.
     for t, bag in (ticks or {}).items():
@@ -184,7 +187,8 @@ def settle_game(winner, duration_s, wipe_by_type, state_ticks=None,
         G = episode_return(
             t, winner, duration_s, wipe_by_type,
             endgame_s=endgame_s, endgame_hunter=endgame_hunter,
-            state_ticks=state_ticks)
+            state_ticks=state_ticks,
+            n_conv=n_conv, team_size=team_size)
         _mc_update(t, G)
         # Ride along on overlays so Q survives even if rl_q.json is dropped.
         try:

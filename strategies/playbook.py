@@ -1512,6 +1512,13 @@ def credit_decisions(match):
                 state_bag = {}
             short_n = sum(int(v or 0) for k, v in state_bag.items() if str(k) in SHORT_STATES)
             credited = (n >= 1) if (care or short_n >= 1) else (n >= MIN_CREDIT and share >= MIN_SHARE)
+            n_conv = len(match.get('conversions') or [])
+            scale = float(max(6, int(match.get('teamSize') or 8)))
+            war = 0.45 * math.tanh(n_conv / scale)
+            card_eats = 0
+            for row in match.get('conversions') or []:
+                if str(row.get('winner_type') or '').upper() == tname and str(row.get('winner_strategy') or '') == sid:
+                    card_eats += 1
             if not credited:
                 st['glimpse'] = int(st.get('glimpse') or 0) + 1
                 payoff = -0.02
@@ -1522,8 +1529,8 @@ def credit_decisions(match):
                     clean = tname not in type_blunder
                     payoff = 0.15 * share + (0.28 if clean else -0.40)
                 else:
-                    # Winning is good. Duration is not a score — stalling to
-                    # farm clock is not a strategy we want.
+                    # Winning is good. Wars (many conversions) are good.
+                    # Duration is not a score.
                     if tname == winner:
                         st['wins'] = float(st.get('wins') or 0) + share
                         st['alpha'] = float(st.get('alpha') or 1.0) + share
@@ -1531,6 +1538,7 @@ def credit_decisions(match):
                     else:
                         st['beta'] = float(st.get('beta') or 1.0) + share
                         payoff = -0.25 * share
+                    payoff += war + 0.25 * (card_eats / max(1.0, n / 8.0))
                     if int(st.get('last_prey_blunder') or 0):
                         st['beta'] = float(st.get('beta') or 1.0) + 0.4
             st['ema'] = (1.0 - EMA) * float(st.get('ema') or 0) + EMA * payoff
@@ -1694,7 +1702,9 @@ def credit_decisions(match):
             match.get('state_ticks'),
             endgame_s=match.get('endgame_seconds') or 0,
             endgame_hunter=match.get('endgame_hunter'),
-            ticks=match.get('ticks'))
+            ticks=match.get('ticks'),
+            n_conv=len(match.get('conversions') or []),
+            team_size=int(match.get('teamSize') or 8))
     except Exception as e:
         try:
             from optimizer.paths import log_path
