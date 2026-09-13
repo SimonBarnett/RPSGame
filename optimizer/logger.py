@@ -34,6 +34,7 @@ class Metrics:
     POP_CSV = log_path('metrics_population.csv')
     SUMMARY = log_path('metrics_summary.txt')
     TOTAL_FILE = log_path('games_total.txt')
+    GEN_FILE = log_path('generation.txt')
 
     @classmethod
     def read_games_total(cls):
@@ -70,6 +71,26 @@ class Metrics:
     def bump_games_total(cls):
         n = cls.read_games_total() + 1
         return cls.write_games_total(n)
+
+    @classmethod
+    def read_generation(cls):
+        n = 0
+        try:
+            with open(cls.GEN_FILE, encoding='utf-8') as f:
+                n = int(float(f.read().strip() or 0))
+        except Exception:
+            n = 0
+        return max(0, n)
+
+    @classmethod
+    def write_generation(cls, n):
+        n = max(0, int(n))
+        try:
+            with open(cls.GEN_FILE, 'w', encoding='utf-8') as f:
+                f.write(str(n) + '\n')
+        except Exception:
+            pass
+        return n
 
     @staticmethod
     def _safe_append(path, text_line):

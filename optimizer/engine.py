@@ -65,6 +65,12 @@ class StrategyOptimizer:
     def __init__(self):
         self.last_changes = []
         self.games_seen = 0
+        try:
+            from optimizer.logger import Metrics
+            StrategyOptimizer.GENERATION = int(Metrics.read_generation() or 0)
+            self.games_seen = int(Metrics.read_games_total() or 0)
+        except Exception:
+            pass
         self._ga_pop = None          # legacy type-wide (unused)
         self._ga_fitness = None
         self._ga_gen = 0
@@ -2164,6 +2170,11 @@ class StrategyOptimizer:
             recent_only = self.SAMPLE_WINDOW
         self.last_changes = []
         StrategyOptimizer.GENERATION += 1
+        try:
+            from optimizer.logger import Metrics
+            Metrics.write_generation(StrategyOptimizer.GENERATION)
+        except Exception:
+            pass
         games = []
         try:
             games = self._load_games()

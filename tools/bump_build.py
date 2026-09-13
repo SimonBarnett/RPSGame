@@ -28,7 +28,14 @@ def _read_games():
         return 0
 
 
+GEN_FILE = os.path.join(ROOT, "optimizer", "metrics", "generation.txt")
+
+
 def _read_gen():
+    try:
+        return int(open(GEN_FILE, encoding="utf-8").read().strip() or 0)
+    except Exception:
+        pass
     gen = 0
     try:
         for ln in open(OPT_LOG, encoding="utf-8", errors="replace"):
@@ -38,6 +45,31 @@ def _read_gen():
     except Exception:
         pass
     return gen
+
+
+def write_counters(gen=None, games=None, bump_build=False):
+    """Update welcome GEN/GAMES. If bump_build, also increment BUILD n."""
+    bag = _load_build()
+    if bump_build:
+        bag["build"] = int(bag.get("build") or 0) + 1
+    if gen is None:
+        gen = _read_gen()
+    if games is None:
+        games = _read_games()
+    bag["gen"] = int(gen)
+    bag["games"] = int(games)
+    bag["at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
+    bag["sha"] = _git_sha()
+    os.makedirs(PUB, exist_ok=True)
+    json.dump(bag, open(BUILD_JSON, "w", encoding="utf-8"), indent=2)
+    open(BUILD_JSON, "a", encoding="utf-8").write("\n")
+    stamp(RPS_JS, bag)
+    if bump_build:
+        stamp_sw(bag["build"])
+        stamp_html(INDEX, bag["build"])
+        stamp_html(EMBED, bag["build"])
+    print("BUILD %(build)s  GEN %(gen)s  GAMES %(games)s  %(at)s  %(sha)s" % bag)
+    return bag
 
 
 def _git_sha():
@@ -111,20 +143,9 @@ def stamp_html(path, build_n):
 
 
 def main():
-    bag = _load_build()
-    bag["build"] = int(bag.get("build") or 0) + 1
-    bag["gen"] = _read_gen()
-    bag["games"] = _read_games()
-    bag["at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
-    bag["sha"] = _git_sha()
-    os.makedirs(PUB, exist_ok=True)
-    json.dump(bag, open(BUILD_JSON, "w", encoding="utf-8"), indent=2)
-    open(BUILD_JSON, "a", encoding="utf-8").write("\n")
-    stamp(RPS_JS, bag)
-    stamp_sw(bag["build"])
-    stamp_html(INDEX, bag["build"])
-    stamp_html(EMBED, bag["build"])
-    print("BUILD %(build)s  GEN %(gen)s  GAMES %(games)s  %(at)s  %(sha)s" % bag)
+    import sys
+    bump = "--counters-only" not in sys.argv
+    write_counters(bump_build=bump)
 
 
 if __name__ == "__main__":

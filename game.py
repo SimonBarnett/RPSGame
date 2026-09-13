@@ -142,13 +142,23 @@ def learn(n=None):
         w._pending_gameover_type = None
         try:
             w.optimizer.optimise(persist=True)
-            print('  learn gen=%s changes=%d' % (
+            print('  learn gen=%s games=%s changes=%d' % (
                 getattr(w.optimizer, 'GENERATION', '?'),
+                getattr(w.optimizer, 'games_seen', '?'),
                 len(getattr(w.optimizer, 'last_changes', []) or [])), flush=True)
         except Exception as e:
             print('  optimise', e, flush=True)
     except KeyboardInterrupt:
         print('\nstopped after %d games' % i, flush=True)
+    try:
+        from optimizer.logger import Metrics
+        from tools.bump_build import write_counters
+        write_counters(
+            gen=int(getattr(w.optimizer, 'GENERATION', 0) or 0),
+            games=int(Metrics.read_games_total() or 0),
+            bump_build=False)
+    except Exception as e:
+        print('stamp counters', e, flush=True)
     try:
         import strategies.playbook as playbook
         njs = playbook.publish_to_js(full=True)
