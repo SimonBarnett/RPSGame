@@ -1328,8 +1328,11 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     if near_n >= 3:
         want = blend_headings(want, desync_heading(p, prey['obj'] if prey else None), 0.3)
     if mode == 'evade' and fear and fear['d'] < p.size * 6:
-        ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y)))
-        if ahead < 0.6:
+        fear_h = heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y)
+        facing_in = abs(ang_diff(p.angle, fear_h)) < 0.6
+        want_in = abs(ang_diff(want if want is not None else p.angle, fear_h)) < 0.6
+        # Brake only while still driving into the predator. Keep speed to kite around.
+        if facing_in and want_in:
             p.speed *= 0.72
     for f in forts or ():
         if _fort_scale(f) < 0.85:

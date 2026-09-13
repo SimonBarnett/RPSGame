@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 39, gen: 375, games: 10147, at: "2026-09-13 18:35Z", sha: "9884066" };
+  const BUILD = { n: 40, gen: 406, games: 10218, at: "2026-09-13 19:04Z", sha: "1b1ab99" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1623,9 +1623,12 @@
       if (nearN >= 3) want = blendHeadings(want, desyncHeading(p, prey && prey.obj), 0.3);
 
       // evasion brake / reverse (Python apply_evasion, compact)
+      // Only while still driving into the predator — keep speed to kite around.
       if (mode === 'evade' && fear && fear.d < p.size * 6) {
-        const ahead = Math.abs(angDiff(p.angle, headingTo(p.x, p.y, fear.obj.x, fear.obj.y)));
-        if (ahead < 0.6) p.speed *= 0.72;
+        const fearH = headingTo(p.x, p.y, fear.obj.x, fear.obj.y);
+        const facingIn = Math.abs(angDiff(p.angle, fearH)) < 0.6;
+        const wantIn = Math.abs(angDiff(want != null ? want : p.angle, fearH)) < 0.6;
+        if (facingIn && wantIn) p.speed *= 0.72;
       }
 
       for (let fi = 0; fi < forts.length; fi++) {
