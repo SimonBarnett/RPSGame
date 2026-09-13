@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 49, gen: 470, games: 10420, at: "2026-09-13 21:09Z", sha: "3d1a281" };
+  const BUILD = { n: 50, gen: 481, games: 10443, at: "2026-09-13 21:35Z", sha: "2b35434" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1717,24 +1717,32 @@
       if (!best) return want;
       const d = Math.sqrt(bestD2);
       const fearH = headingTo(p.x, p.y, best.x, best.y);
-      const into = Math.abs(angDiff(want, fearH));
-      const orbiting = Math.abs(into - Math.PI * 0.5) < 0.40;
-      if (d < p.size * 6) return angNorm(fearH + Math.PI);
-      if (into >= 1.05 && !orbiting) return want;
-      if (!prey) return angNorm(fearH + Math.PI);
+      if (!prey) {
+        if (d < p.size * 6 || Math.abs(angDiff(want, fearH)) < 1.05) return angNorm(fearH + Math.PI);
+        return want;
+      }
       const fx = prey.x - best.x, fy = prey.y - best.y;
       const fl = Math.hypot(fx, fy) || 1;
       const gx = prey.x + fx / fl * p.size * 8;
       const gy = prey.y + fy / fl * p.size * 8;
       const toGoal = headingTo(p.x, p.y, gx, gy);
       if (Math.abs(angDiff(toGoal, fearH)) >= 1.05) return toGoal;
-      const left = angNorm(fearH + Math.PI * 0.5);
-      const right = angNorm(fearH - Math.PI * 0.5);
-      const dl = Math.abs(angDiff(left, toGoal));
-      const dr = Math.abs(angDiff(right, toGoal));
-      if (dl < dr - 1e-6) return left;
-      if (dr < dl - 1e-6) return right;
-      return Math.abs(angDiff(want, left)) <= Math.abs(angDiff(want, right)) ? left : right;
+      let px = -(best.y - p.y), py = best.x - p.x;
+      if (px * (gx - p.x) + py * (gy - p.y) < 0) { px = -px; py = -py; }
+      const pl = Math.hypot(px, py) || 1;
+      const along = p.size * 6;
+      const clear = Math.max(p.size * 8, 1.8 * (d + along));
+      const wrap = headingTo(
+        p.x, p.y,
+        best.x + px / pl * clear + fx / fl * along,
+        best.y + py / pl * clear + fy / fl * along
+      );
+      if (Math.abs(angDiff(wrap, fearH)) >= 0.90) return wrap;
+      const left = angNorm(fearH + 1.20);
+      const right = angNorm(fearH - 1.20);
+      const h = Math.abs(angDiff(left, toGoal)) <= Math.abs(angDiff(right, toGoal)) ? left : right;
+      if (Math.abs(angDiff(h, fearH)) >= 0.90) return h;
+      return angNorm(fearH + Math.PI);
     }
 
     function avoidFearOverlap(p, want) {
