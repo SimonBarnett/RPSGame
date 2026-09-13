@@ -16,9 +16,9 @@ FEAR_N = {'ROCK': 'PAPER', 'PAPER': 'SCISSORS', 'SCISSORS': 'ROCK'}
 CRUISE_MULT = 5.5
 LAST_MAN_FEAR_SPEED = 1.25
 DEFAULT_MOTION = {
-    'ROCK': {'speed': 1.0800, 'turn': 16.2000},
+    'ROCK': {'speed': 1.3025, 'turn': 16.2000},
     'PAPER': {'speed': 2.0000, 'turn': 13.8000},
-    'SCISSORS': {'speed': 1.1800, 'turn': 14.1500},
+    'SCISSORS': {'speed': 1.3825, 'turn': 14.1500},
 }
 WALL_RESTITUTION = 0.92
 PAIR_RESTITUTION = 0.35
@@ -258,6 +258,8 @@ def rank_dirs(p, particles, c, forts):
                 fm *= 2.6
             if fear_n >= self_n:
                 fm *= 1.35
+            if tn == 'PAPER':
+                fm *= 1.85
             s['risk'] += max(0.35, df * fm)
         elif qn == PREY_N[tn]:
             amt = df
@@ -758,6 +760,29 @@ def nearest(p, type_name, particles):
     return {'obj': best, 'd': math.sqrt(best_d)} if best is not None else None
 
 
+def safest_prey(p, preys, fears):
+    """Prey with the most space from fear — do not dive the scrum."""
+    best, best_s = None, -1e18
+    sz = p.size
+    for prey in preys or ():
+        if prey is p:
+            continue
+        pd = math.hypot(p.x - prey.x, p.y - prey.y)
+        fd = 1e9
+        for f in fears or ():
+            d = math.hypot(prey.x - f.x, prey.y - f.y)
+            if d < fd:
+                fd = d
+        s = fd - 0.45 * pd
+        if fd < sz * 5.5:
+            s -= 80.0
+        if s > best_s:
+            best_s, best = s, prey
+    if best is None:
+        return None
+    return {'obj': best, 'd': math.hypot(p.x - best.x, p.y - best.y)}
+
+
 def pack_eject(p, particles, W, H):
     edge = p.size * 5.5
     on_edge = p.x < edge or p.x > W - edge or p.y < edge or p.y > H - edge
@@ -1059,8 +1084,11 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     prey_pool = (by_type or {}).get(prey_t) or pool
     fear_pool = (by_type or {}).get(fear_t) or pool
     ally_pool = (by_type or {}).get(tn) or pool
-    prey = nearest(p, prey_t, prey_pool)
     fear = nearest(p, fear_t, fear_pool)
+    if tn in ('PAPER', 'ROCK') and fear_n > 0:
+        prey = safest_prey(p, prey_pool, fear_pool) or nearest(p, prey_t, prey_pool)
+    else:
+        prey = nearest(p, prey_t, prey_pool)
     if fear and fear.get('obj') is not None and fear_n > 0:
         fo = fear['obj']
         p._lastFear = {'x': fo.x, 'y': fo.y}
@@ -1235,10 +1263,12 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         flee = ang_norm(fear_h + math.pi)
         pd = float(prey['d']) if prey and prey.get('obj') is not None else 1e9
         in_path = abs(ang_diff(want if want is not None else p.angle, fear_h)) < 0.9
-        if fd < p.size * 4.5:
+        hard = p.size * (6.0 if tn == 'PAPER' else 4.5)
+        soft = p.size * (8.0 if tn == 'PAPER' else 6.5)
+        if fd < hard:
             want = flee
             mode = 'evade'
-        elif fd < p.size * 6.5 and (fd < pd or in_path):
+        elif fd < soft and (fd < pd or in_path):
             want = blend_headings(want, flee, 0.65)
         if state == 'LAST_MAN' and fd < p.size * 9:
             want = flee

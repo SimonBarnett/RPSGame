@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 30, gen: 63, games: 9461, at: "2026-09-13 10:07Z", sha: "cc464bc" };
+  const BUILD = { n: 31, gen: 84, games: 9525, at: "2026-09-13 14:17Z", sha: "4935979" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -26,9 +26,9 @@
     SCISSORS: [70, 178, 230]
   };
   const DEFAULT_MOTION = {
-    ROCK: { speed: 1.0800, turn: 16.2000 },
+    ROCK: { speed: 1.3025, turn: 16.2000 },
     PAPER: { speed: 2.0000, turn: 13.8000 },
-    SCISSORS: { speed: 1.1800, turn: 14.1500 }
+    SCISSORS: { speed: 1.3825, turn: 14.1500 }
   };
   const CRUISE_MULT = 5.5;
   const LAST_MAN_FEAR_SPEED = 1.25;
@@ -637,6 +637,7 @@
         let fm = 1 + 0.35 * df;
         if (dist < 10 * p.size) fm *= 2.6;
         if (fearN >= selfN) fm *= 1.35;
+        if (p.type === 'PAPER') fm *= 1.85;
         s.risk += Math.max(0.35, df * fm);
         s.nFear++;
       } else if (q.type === PREY[p.type]) {
@@ -1335,6 +1336,26 @@
       }
       return best ? { obj: best, d: Math.sqrt(bestD) } : null;
     }
+    function safestPrey(p, preyT, fearT) {
+      let best = null, bestS = -1e18;
+      const sz = p.size;
+      for (let i = 0; i < particles.length; i++) {
+        const prey = particles[i];
+        if (prey === p || prey.type !== preyT) continue;
+        const pd = Math.hypot(p.x - prey.x, p.y - prey.y);
+        let fd = 1e9;
+        for (let j = 0; j < particles.length; j++) {
+          const f = particles[j];
+          if (f.type !== fearT) continue;
+          const d = Math.hypot(prey.x - f.x, prey.y - f.y);
+          if (d < fd) fd = d;
+        }
+        let s = fd - 0.45 * pd;
+        if (fd < sz * 5.5) s -= 80;
+        if (s > bestS) { bestS = s; best = prey; }
+      }
+      return best ? { obj: best, d: Math.hypot(p.x - best.x, p.y - best.y) } : null;
+    }
     function com(type) {
       let sx = 0, sy = 0, n = 0;
       for (const q of particles) if (q.type === type) { sx += q.x; sy += q.y; n++; }
@@ -1380,8 +1401,10 @@
       p.card = pickCardHold(teamHold, p.type, book, state);
       p.state = state;
       const preyT = PREY[p.type], fearT = FEAR[p.type];
-      const prey = nearest(p, preyT);
       const fear = nearest(p, fearT);
+      const prey = ((p.type === 'PAPER' || p.type === 'ROCK') && fearN > 0)
+        ? (safestPrey(p, preyT, fearT) || nearest(p, preyT))
+        : nearest(p, preyT);
       if (fear && fearN > 0) {
         const near = 5 * p.size, far = 30 * p.size;
         let df = fear.d < near ? 1 : Math.max(0, 1 - (fear.d - near) / Math.max(1, far - near));
@@ -1533,8 +1556,10 @@
         const flee = angNorm(fearH + Math.PI);
         const pd = (prey && prey.obj) ? prey.d : 1e9;
         const inPath = Math.abs(angDiff(want != null ? want : p.angle, fearH)) < 0.9;
-        if (fd < p.size * 4.5) { want = flee; mode = 'evade'; }
-        else if (fd < p.size * 6.5 && (fd < pd || inPath)) want = blendHeadings(want, flee, 0.65);
+        const hard = p.size * (p.type === 'PAPER' ? 6 : 4.5);
+        const soft = p.size * (p.type === 'PAPER' ? 8 : 6.5);
+        if (fd < hard) { want = flee; mode = 'evade'; }
+        else if (fd < soft && (fd < pd || inPath)) want = blendHeadings(want, flee, 0.65);
         if (state === 'LAST_MAN' && fd < p.size * 9) { want = flee; mode = 'evade'; }
       }
       if (state === 'NEAR_WIPE' && fear && fear.obj && fear.d < p.size * 8) {
