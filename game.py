@@ -101,10 +101,10 @@ def learn(n=None):
       while forever or i < int(n):
         i += 1
         if random.random() < 0.35:
-            w.teamSize = random.randint(5, 20)
+            w.teamSize = random.randint(8, 20)
             w.forts = random.randint(4, 10)
         else:
-            w.teamSize = random.randint(5, 9)
+            w.teamSize = random.randint(8, 12)
             w.forts = random.randint(3, 6)
         w.reset()
         try:

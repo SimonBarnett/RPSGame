@@ -491,10 +491,10 @@ def intercept_heading(p, prey, mode):
     return chase_heading(p, prey, 18)
 
 
-def hunt_heading(p, prey, look, tn):
+def hunt_heading(p, prey, look, tn, fear_d=None):
     if prey is None:
         return None
-    if tn == 'ROCK':
+    if tn == 'ROCK' and (fear_d is None or fear_d > p.size * 10.0):
         return intercept_heading(p, prey, 'lead')
     return chase_heading(p, prey, look)
 
@@ -541,10 +541,10 @@ def _fear_clump_steer(p, particles, prey_t, want):
     fear_t = FEAR_N.get(_tname(p))
     if not fear_t or want is None:
         return None
-    paper = _tname(p) == 'PAPER'
-    rng = p.size * (14.0 if paper else 10.0)
+    wary = _tname(p) in ('PAPER', 'ROCK')
+    rng = p.size * (14.0 if wary else 10.0)
     rng2 = rng * rng
-    cone = 0.50 if paper else 0.76
+    cone = 0.50 if wary else 0.76
     wx, wy = math.sin(want), -math.cos(want)
     sx = sy = 0.0
     n = 0
@@ -564,7 +564,7 @@ def _fear_clump_steer(p, particles, prey_t, want):
         n += 1
         if d < p.size * 4.5:
             close = True
-    min_n = 1 if (paper or getattr(p, 'state', None) == 'LAST_MAN') else 2
+    min_n = 1 if (wary or getattr(p, 'state', None) == 'LAST_MAN') else 2
     if n < min_n:
         return None
     cx, cy = sx / n, sy / n
@@ -1184,7 +1184,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             if tgt is not None:
                 bag['map'][_pid(p)] = tgt
         p._locked = tgt
-        want = hunt_heading(p, tgt, look, tn) if tgt is not None else want
+        want = hunt_heading(p, tgt, look, tn, fear['d'] if fear else None) if tgt is not None else want
     elif fear and fobj is not None and fear_n > 0 and state != 'CLEAR_HUNT':
         fear_ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fobj.x, fobj.y))) < math.pi / 2
         fear_close = fear['d'] < 8 * p.size or (fear_ahead and fear['d'] < 12 * p.size)
@@ -1194,7 +1194,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             p._locked = None
         elif prey:
             mode = 'chase'
-            want = blend_headings(hunt_heading(p, prey['obj'], look, tn), sector_h, 0.35)
+            want = blend_headings(hunt_heading(p, prey['obj'], look, tn, fear['d'] if fear else None), sector_h, 0.35)
             p._locked = prey['obj']
     elif prey:
         closer = 0
@@ -1209,7 +1209,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             p._locked = None
         else:
             mode = 'chase'
-            want = blend_headings(hunt_heading(p, prey['obj'], look, tn), sector_h, 0.35)
+            want = blend_headings(hunt_heading(p, prey['obj'], look, tn, fear['d'] if fear else None), sector_h, 0.35)
             p._locked = prey['obj']
     else:
         want = sector_h
@@ -1259,7 +1259,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     })
     locked = getattr(p, '_locked', None)
     if state == 'CLEAR_HUNT' and locked is not None and locked in world.particles:
-        want = hunt_heading(p, locked, look, tn)
+        want = hunt_heading(p, locked, look, tn, fear['d'] if fear else None)
         mode = 'chase'
     if fear_n > 0 and prey_n <= 1 and prey and prey.get('obj') is not None and prey['d'] < p.size * 4:
         want = safe_h
@@ -1274,8 +1274,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         flee = ang_norm(fear_h + math.pi)
         pd = float(prey['d']) if prey and prey.get('obj') is not None else 1e9
         in_path = abs(ang_diff(want if want is not None else p.angle, fear_h)) < 0.9
-        hard = p.size * (6.0 if tn == 'PAPER' else 4.5)
-        soft = p.size * (8.0 if tn == 'PAPER' else 6.5)
+        hard = p.size * (6.0 if tn in ('PAPER', 'ROCK') else 4.5)
+        soft = p.size * (8.0 if tn in ('PAPER', 'ROCK') else 6.5)
         if fd < hard:
             want = flee
             mode = 'evade'

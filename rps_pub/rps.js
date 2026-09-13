@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 35, gen: 284, games: 9944, at: "2026-09-13 17:02Z", sha: "85b6685" };
+  const BUILD = { n: 36, gen: 321, games: 10027, at: "2026-09-13 17:35Z", sha: "5232cf2" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -940,9 +940,9 @@
     }
     return chaseHeading(p, prey, 18);
   }
-  function huntHeading(p, prey, look) {
+  function huntHeading(p, prey, look, fearD) {
     if (!prey) return null;
-    if (p.type === 'ROCK') return interceptHeading(p, prey, 'lead');
+    if (p.type === 'ROCK' && (fearD == null || fearD > p.size * 10)) return interceptHeading(p, prey, 'lead');
     return chaseHeading(p, prey, look);
   }
   /** Chase only if convert ETA beats predator ETA (maths/time.py). */
@@ -1484,7 +1484,7 @@
           simVoronoi.map[p.id] = tgt;
         }
         p._locked = tgt;
-        want = huntHeading(p, tgt, look);
+        want = huntHeading(p, tgt, look, fear && fear.d);
       } else if (fear && fobj && fearN > 0 && state !== 'CLEAR_HUNT') {
         const fearAhead = Math.abs(angDiff(p.angle, headingTo(p.x, p.y, fobj.x, fobj.y))) < Math.PI / 2;
         const fearClose = fear.d < 8 * p.size || (fearAhead && fear.d < 12 * p.size);
@@ -1494,7 +1494,7 @@
           p._locked = null;
         } else if (prey) {
           mode = 'chase';
-          want = blendHeadings(huntHeading(p, prey.obj, look), sectorH, 0.35);
+          want = blendHeadings(huntHeading(p, prey.obj, look, fear && fear.d), sectorH, 0.35);
           p._locked = prey.obj;
         }
       } else if (prey) {
@@ -1510,7 +1510,7 @@
           p._locked = null;
         } else {
           mode = 'chase';
-          want = blendHeadings(huntHeading(p, prey.obj, look), sectorH, 0.35);
+          want = blendHeadings(huntHeading(p, prey.obj, look, fear && fear.d), sectorH, 0.35);
           p._locked = prey.obj;
         }
       } else {
@@ -1546,7 +1546,7 @@
         look: look, fearN: fearN, preyN: preyN, allies: allies, preys: preys
       });
       if (state === 'CLEAR_HUNT' && p._locked && particles.indexOf(p._locked) >= 0) {
-        want = huntHeading(p, p._locked, look);
+        want = huntHeading(p, p._locked, look, fear && fear.d);
         mode = 'chase';
       }
       // Python last-prey: steer OFF the meal while predators live. Nothing else may overwrite this.
@@ -1562,8 +1562,8 @@
         const flee = angNorm(fearH + Math.PI);
         const pd = (prey && prey.obj) ? prey.d : 1e9;
         const inPath = Math.abs(angDiff(want != null ? want : p.angle, fearH)) < 0.9;
-        const hard = p.size * (p.type === 'PAPER' ? 6 : 4.5);
-        const soft = p.size * (p.type === 'PAPER' ? 8 : 6.5);
+        const hard = p.size * ((p.type === 'PAPER' || p.type === 'ROCK') ? 6 : 4.5);
+        const soft = p.size * ((p.type === 'PAPER' || p.type === 'ROCK') ? 8 : 6.5);
         if (fd < hard) { want = flee; mode = 'evade'; }
         else if (fd < soft && (fd < pd || inPath)) want = blendHeadings(want, flee, 0.65);
         if (state === 'LAST_MAN' && fd < p.size * 9) { want = flee; mode = 'evade'; }
@@ -1698,10 +1698,10 @@
     function fearClumpSteer(p, want) {
       const fearT = FEAR[p.type];
       if (!fearT || want == null) return null;
-      const paper = p.type === 'PAPER';
-      const rng = p.size * (paper ? 14 : 10);
+      const wary = p.type === 'PAPER' || p.type === 'ROCK';
+      const rng = p.size * (wary ? 14 : 10);
       const rng2 = rng * rng;
-      const cone = paper ? 0.50 : 0.76;
+      const cone = wary ? 0.50 : 0.76;
       const wx = Math.sin(want), wy = -Math.cos(want);
       let sx = 0, sy = 0, n = 0, close = false;
       for (let i = 0; i < particles.length; i++) {
@@ -1715,7 +1715,7 @@
         sx += q.x; sy += q.y; n++;
         if (d < p.size * 4.5) close = true;
       }
-      const minN = (paper || p.state === 'LAST_MAN') ? 1 : 2;
+      const minN = (wary || p.state === 'LAST_MAN') ? 1 : 2;
       if (n < minN) return null;
       const cx = sx / n, cy = sy / n;
       if (close) return angNorm(headingTo(p.x, p.y, cx, cy) + Math.PI);

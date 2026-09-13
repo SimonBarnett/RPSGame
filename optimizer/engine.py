@@ -3623,10 +3623,18 @@ class StrategyOptimizer:
                 hist.append((gen, key))
                 self.last_changes.append('%s match' % key)
 
-        if sp > 0.20:
+        paper_ok = False
+        try:
+            from optimizer.motion import _shares
+            sh, _n = _shares()
+            paper_ok = float((sh or {}).get('PAPER') or 0) >= 0.28
+        except Exception:
+            paper_ok = False
+        if sp > 0.20 and not paper_ok:
             for sid in ('OPEN_KITE', 'FORT_KITE', 'ORBIT_KITE', 'SURVIVE_FEAR', 'SCREEN_HUNT'):
                 for path in ('escape_bonus', 'fort_cover_weight', 'avoid_weight'):
                     try_nudge('PAPER', sid, path, +1, 0.65)
+        if sp > 0.20:
             for sid in ('PACK_HUNT', 'CLEAR_SPLIT'):
                 try_nudge('SCISSORS', sid, 'near_target_aggro', -1, 0.4)
         if rs < -0.20:
