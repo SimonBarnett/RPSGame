@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 42, gen: 423, games: 10259, at: "2026-09-13 19:34Z", sha: "f94c1f6" };
+  const BUILD = { n: 43, gen: 439, games: 10298, at: "2026-09-13 20:04Z", sha: "6104480" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1623,7 +1623,7 @@
       if (nearN >= 3) want = blendHeadings(want, desyncHeading(p, prey && prey.obj), 0.3);
 
       // evasion brake / reverse (Python apply_evasion, compact)
-      if (mode === 'evade' && fear && fear.d < p.size * 6) {
+      if (fear && fear.obj && state !== 'NEAR_WIPE' && fear.d < p.size * 6) {
         const ahead = Math.abs(angDiff(p.angle, headingTo(p.x, p.y, fear.obj.x, fear.obj.y)));
         if (ahead < 0.6) p.speed *= 0.72;
       }
@@ -1751,7 +1751,7 @@
       if (close) return { h: angNorm(headingTo(p.x, p.y, cx, cy) + Math.PI), close: true };
       const ch = headingTo(p.x, p.y, cx, cy);
       const sign = (p.id % 2) ? 1 : -1;
-      return { h: blendHeadings(want, angNorm(ch + sign * (Math.PI * 0.5)), 0.85), close: false };
+      return { h: angNorm(ch + sign * (Math.PI * 0.5)), close: false };
     }
 
     function victorySteer(p, dance, tick) {

@@ -573,7 +573,7 @@ def _fear_clump_steer(p, particles, prey_t, want):
     ch = heading_to(p.x, p.y, cx, cy)
     sign = 1.0 if (_pid(p) % 2) else -1.0
     around = ang_norm(ch + sign * (math.pi * 0.5))
-    return blend_headings(want, around, 0.85), False
+    return around, False
 
 
 def _kite_prey_away_from_fear(p, prey, fear, loose=False):
@@ -1328,7 +1328,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             near_n += 1
     if near_n >= 3:
         want = blend_headings(want, desync_heading(p, prey['obj'] if prey else None), 0.3)
-    if mode == 'evade' and fear and fear['d'] < p.size * 6:
+    if (fear and fear.get('obj') is not None and state != 'NEAR_WIPE'
+            and float(fear.get('d') or 1e9) < p.size * 6):
         ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y)))
         if ahead < 0.6:
             p.speed *= 0.72
