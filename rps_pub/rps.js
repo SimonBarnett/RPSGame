@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 32, gen: 106, games: 9589, at: "2026-09-13 14:38Z", sha: "beba170" };
+  const BUILD = { n: 33, gen: 106, games: 9589, at: "2026-09-13 14:47Z", sha: "1803c44" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1001,7 +1001,7 @@
     let list = (steps || []).slice();
     const CHASE_FNS = { 'time.heading': 1, 'time.eta': 1, 'intercept.heading': 1, 'intercept.lead': 1, 'intercept.chord': 1, 'lanes.heading': 1 };
     if (state === 'LAST_PREY_RISK' || (ctx.fearN > 0 && ctx.preyN <= 1) || ctx.fearN >= 2) {
-      list = list.filter(function (s) { return !CHASE_FNS[String((s || {}).fn || '')]; });}
+      list = list.filter(function (s) { return !CHASE_FNS[String((s || {}).fn || '')]; });
     }
     if (state === 'CONTESTED' || state === 'SMALL_UNIT') {
       list = list.filter(function (s) {
