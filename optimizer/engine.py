@@ -2355,16 +2355,22 @@ class StrategyOptimizer:
                 _pb.set_match_context(ts)
             except Exception:
                 pass
-            if heavy:
-                try:
-                    self._map_archive_step(fitness, wipe_risk, share)
-                except Exception as _me:
-                    self._log_raw('MAP-Elites archive failed: %s' % _me)
-            else:
-                try:
-                    self._map_fill_live(fitness, wipe_risk, ts)
-                except Exception as _me:
-                    self._log_raw('MAP-Elites live fill failed: %s' % _me)
+            try:
+                from config import Config as _Cfg
+                _skip_map = bool(getattr(_Cfg, 'FAST_SIM', False))
+            except Exception:
+                _skip_map = False
+            if not _skip_map:
+                if heavy:
+                    try:
+                        self._map_archive_step(fitness, wipe_risk, share)
+                    except Exception as _me:
+                        self._log_raw('MAP-Elites archive failed: %s' % _me)
+                else:
+                    try:
+                        self._map_fill_live(fitness, wipe_risk, ts)
+                    except Exception as _me:
+                        self._log_raw('MAP-Elites live fill failed: %s' % _me)
 
             self._log_raw(
                 'knob writer=%s gen=%d heavy=%s n=%d' % (
@@ -2401,6 +2407,10 @@ class StrategyOptimizer:
             self._log_raw('timing optimise=%.0fms persist_incl gen=%d' % (
                 (_time.perf_counter() - _t_opt) * 1000.0,
                 int(getattr(self, 'GENERATION', 0) or 0)))
+        except Exception:
+            pass
+        try:
+            self._flush_log()
         except Exception:
             pass
         
@@ -3835,9 +3845,22 @@ class StrategyOptimizer:
     def _log_raw(self, msg):
         import datetime
         line = f'[{datetime.datetime.now().isoformat(timespec="seconds")}] {msg}\n'
+        buf = getattr(self, '_log_buf', None)
+        if buf is None:
+            self._log_buf = []
+            buf = self._log_buf
+        buf.append(line)
+        if len(buf) >= 24:
+            self._flush_log()
+
+    def _flush_log(self):
+        buf = getattr(self, '_log_buf', None)
+        if not buf:
+            return
+        self._log_buf = []
         try:
             with open(self.LOG_FILE, 'a', encoding='utf-8') as f:
-                f.write(line)
+                f.write(''.join(buf))
         except Exception:
             pass
 

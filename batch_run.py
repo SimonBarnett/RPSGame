@@ -19,16 +19,15 @@ Config.LEARN_REVEAL_MS = 0
 Config.LEARN_MAX_MS = 0
 Config.TARGET_FPS = 0
 # Live cap is 6. 64 made every particle think every frame (~70ms).
-Config.AI_BUDGET = 8
-Config.TEAM_UPDATE_EVERY = 4
-Config.FAST_SIM_PHYS_STEPS = 3
+Config.AI_BUDGET = 48
+Config.TEAM_UPDATE_EVERY = 5
+Config.FAST_SIM_PHYS_STEPS = 1
 Config.FAST_SIM_AI_EVERY = 1
 
 from arena import Arena
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 20
-# 3 physics steps × 700 frames ≈ 2100 live-equivalent ticks
-MAX_FRAMES = 700
+MAX_FRAMES = 2400
 
 w = Arena(800, 600)
 if hasattr(w, 'perf') and w.perf is not None:
@@ -47,7 +46,7 @@ for i in range(N):
     frames = 0
     g0 = time.time()
     while w.running and not w.gameover() and frames < MAX_FRAMES:
-        w.draw()
+        w.tick()
         frames += 1
     winner = 'NONE'
     pending = getattr(w, '_pending_gameover_type', None)

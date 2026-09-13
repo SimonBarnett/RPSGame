@@ -64,8 +64,16 @@ CHASE_FNS = {
 
 
 def _tname(p):
+    n = getattr(p, '_tn', None)
+    if n:
+        return n
     t = getattr(p, 'type', None)
-    return t.name if hasattr(t, 'name') else str(t)
+    n = t.name if hasattr(t, 'name') else str(t)
+    try:
+        p._tn = n
+    except Exception:
+        pass
+    return n
 
 
 def _pid(p):
@@ -202,10 +210,15 @@ def fort_occludes(forts, ax, ay, bx, by, margin=2):
     return None
 
 
+_TWO_PI = math.pi * 2.0
+
+
 def sector_of(bearing):
     best, bd = 0, 1e9
     for i, c in SECTORS:
-        d = abs(ang_diff(c, bearing))
+        d = (bearing - c + math.pi) % _TWO_PI - math.pi
+        if d < 0.0:
+            d = -d
         if d < bd:
             bd, best = d, i
     return best
@@ -218,13 +231,18 @@ def rank_dirs(p, particles, c, forts):
     fear_n = c.get(FEAR_N[tn], 0)
     near, far = 5 * p.size, 30 * p.size
     scores = [{'id': i, 'c': ang, 'risk': 0.0, 'reward': 0.0, 'conf': 0.4} for i, ang in SECTORS]
+    far2 = far * far
+    px, py = p.x, p.y
+    pang = p.angle
+    psz = p.size
     for q in particles:
         if q is p:
             continue
-        dx, dy = q.x - p.x, q.y - p.y
-        dist = math.hypot(dx, dy)
-        if dist > far or dist < 0.5:
+        dx, dy = q.x - px, q.y - py
+        d2 = dx * dx + dy * dy
+        if d2 > far2 or d2 < 0.25:
             continue
+        dist = math.sqrt(d2)
         if dist <= near:
             df = 1.0
         else:
@@ -970,8 +988,15 @@ def _ensure_state(world):
         world._js_tick_i = 0
 
 
-def think(world, p, counts, W, H, pad, world_k, forts):
-    tn = _tname(p)
+def _team_ai(world, tn, counts):
+    """Card select is per type per tick (shared hold slot), not per marble."""
+    cache = getattr(world, '_js_type_ai', None)
+    if cache is None:
+        world._js_type_ai = {}
+        cache = world._js_type_ai
+    hit = cache.get(tn)
+    if hit is not None:
+        return hit
     self_n = counts.get(tn, 0)
     prey_n = counts.get(PREY_N[tn], 0)
     fear_n = counts.get(FEAR_N[tn], 0)
@@ -981,19 +1006,40 @@ def think(world, p, counts, W, H, pad, world_k, forts):
         tn, state, current=slot.get('card'), hold_frames=slot.get('frames') or 0)
     slot['card'] = sid
     slot['frames'] = frames
+    spec = _spec(tn, sid)
+    hit = {
+        'sid': sid, 'frames': frames, 'state': state, 'spec': spec,
+        'moves': _card_moves(tn, sid),
+        'self_n': self_n, 'prey_n': prey_n, 'fear_n': fear_n,
+        'prey_t': PREY_N[tn], 'fear_t': FEAR_N[tn],
+    }
+    cache[tn] = hit
+    return hit
+
+
+def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
+    tn = _tname(p)
+    ai = _team_ai(world, tn, counts)
+    sid = ai['sid']
+    state = ai['state']
+    spec = ai['spec']
+    self_n, prey_n, fear_n = ai['self_n'], ai['prey_n'], ai['fear_n']
+    prey_t, fear_t = ai['prey_t'], ai['fear_t']
     p.card = sid
     p.state = state
-    team = None
     try:
         team = world.teams.get(p.type)
         if team is not None:
             team.strategy_id = sid
-            team.strategy_hold = frames
+            team.strategy_hold = ai['frames']
     except Exception:
         pass
-    prey_t, fear_t = PREY_N[tn], FEAR_N[tn]
-    prey = nearest(p, prey_t, world.particles)
-    fear = nearest(p, fear_t, world.particles)
+    pool = world.particles
+    prey_pool = (by_type or {}).get(prey_t) or pool
+    fear_pool = (by_type or {}).get(fear_t) or pool
+    ally_pool = (by_type or {}).get(tn) or pool
+    prey = nearest(p, prey_t, prey_pool)
+    fear = nearest(p, fear_t, fear_pool)
     if fear and fear.get('obj') is not None and fear_n > 0:
         fo = fear['obj']
         p._lastFear = {'x': fo.x, 'y': fo.y}
@@ -1006,7 +1052,6 @@ def think(world, p, counts, W, H, pad, world_k, forts):
         rate = FEAR_DECAY_FAST if fear_n <= 0 else FEAR_DECAY
         extra = min(0.06, p._frames_since_fear * 0.002)
         p._fear_intensity = max(0.0, float(getattr(p, '_fear_intensity', 0) or 0) - rate - extra)
-    spec = _spec(tn, sid)
     base = spec.get('base') or {}
     mot = DEFAULT_MOTION.get(tn) or {'speed': 1.3, 'turn': 13.0}
     try:
@@ -1059,8 +1104,8 @@ def think(world, p, counts, W, H, pad, world_k, forts):
         p._locked = None
     elif state == 'CLEAR_HUNT' and prey_n > 0:
         mode = 'chase'
-        hunters = [q for q in world.particles if _tname(q) == tn]
-        preys_l = [q for q in world.particles if _tname(q) == prey_t]
+        hunters = list(ally_pool)
+        preys_l = list(prey_pool)
         ids = [str(_pid(q)) for q in preys_l]
         ids.sort()
         key = prey_t + ':' + ','.join(ids) + ':' + str(int(world._js_tick_i / 8))
@@ -1131,8 +1176,8 @@ def think(world, p, counts, W, H, pad, world_k, forts):
             p._locked = None
     if mode == 'chase' and getattr(p, '_locked', None) is not None:
         p._lock_ttl = 80
-    allies = [q for q in world.particles if _tname(q) == tn]
-    preys = [q for q in world.particles if _tname(q) == prey_t]
+    allies = list(ally_pool)
+    preys = list(prey_pool)
     if not getattr(p, '_role', None):
         roles_assign(list(allies))
     hide_h = hide_among_prey(p, preys, fear['obj'] if fear else None)
@@ -1146,7 +1191,7 @@ def think(world, p, counts, W, H, pad, world_k, forts):
         want = blend_headings(want, cov, 0.25)
     assigned = getattr(p, '_locked', None) if state == 'CLEAR_HUNT' else (prey['obj'] if prey else None)
     prey_ctx = {'obj': assigned, 'd': 0} if assigned is not None else prey
-    want = apply_moves(want, _card_moves(tn, sid), {
+    want = apply_moves(want, ai['moves'], {
         'p': p, 'particles': world.particles, 'forts': forts, 'W': W, 'H': H,
         'prey': prey_ctx, 'fear': fear, 'state': state, 'mode': mode,
         'look': look, 'fearN': fear_n, 'preyN': prey_n, 'allies': allies, 'preys': preys,
@@ -1304,6 +1349,7 @@ def collide(world, allow_convert=True):
             loser = b if a_eats else a
             lose_was = loser.type
             loser.type = winner_p.type
+            loser._tn = _tname(winner_p)
             winner_p._eat_cd = eat_cd
             W = float(getattr(world, 'width', 800) or 800)
             H = float(getattr(world, 'height', 600) or 600)
@@ -1389,9 +1435,13 @@ def step(world, move=True, keep_alive=False):
         if not hasattr(p, '_fear_intensity'):
             p._fear_intensity = 0.0
     world._js_sized = True
+    world._js_type_ai = {}
+    by_type = {'ROCK': [], 'PAPER': [], 'SCISSORS': []}
     counts = {'ROCK': 0, 'PAPER': 0, 'SCISSORS': 0}
     for p in particles:
-        counts[_tname(p)] = counts.get(_tname(p), 0) + 1
+        tn = _tname(p)
+        by_type[tn].append(p)
+        counts[tn] = counts.get(tn, 0) + 1
     alive = [k for k, v in counts.items() if v > 0]
     winner = None
     if len(alive) <= 1:
@@ -1407,7 +1457,7 @@ def step(world, move=True, keep_alive=False):
         world._js_charge_ang = rng() * math.pi * 2
     if play_ai or (not move):
         for p in particles:
-            think(world, p, counts, W, H, pad, world_k, forts)
+            think(world, p, counts, W, H, pad, world_k, forts, by_type)
             p.angle = _snap(ang_norm(p.angle), 1e6)
             p.speed = _snap(max(0.0, p.speed), 1e6)
     elif winner and (move or keep_alive):

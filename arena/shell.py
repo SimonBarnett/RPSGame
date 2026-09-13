@@ -20,15 +20,20 @@ from collections import OrderedDict
 import threading
 
 import pygame
-pygame.mixer.pre_init(22050, -16, 2, 512)
+from config import Config, ParticleType, MatchPhase, PREY_OF, FEAR_OF
+from config import TYPE_DEFAULTS
+
+if not getattr(Config, 'FAST_SIM', False):
+    pygame.mixer.pre_init(22050, -16, 2, 512)
 pygame.init()
-try:
-    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
-except Exception:
+if not getattr(Config, 'FAST_SIM', False):
     try:
-        pygame.mixer.init()
+        pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
     except Exception:
-        pass
+        try:
+            pygame.mixer.init()
+        except Exception:
+            pass
 
 from arena.hud import draw_toolbar, draw_winner_banner
 from arena.paths import sound_path, image_path, first_sound
@@ -37,8 +42,7 @@ from optimizer.logger import Metrics
 from optimizer.engine import StrategyOptimizer
 from arena.welcome import draw_welcome
 from maths.phys import collide_pair, SpatialHash
-from config import Config, ParticleType, MatchPhase, PREY_OF, FEAR_OF
-from config import TYPE_DEFAULTS
+from arena import js_tick
 
 def _last_prey_contact_was_womble(world, hunter, prey):
     """True if hunter walked into last prey on purpose with eyes open."""
@@ -731,42 +735,20 @@ def toggle_fullscreen(world):
 
 class Arena:
     def __init__(self, width=1200, height=800) -> None:
-        pygame.display.set_caption('Rock Paper Scissors – Forts + Strategy')
         self.width = width
         self.height = height
-        self.screen = _open_display((width, height), False)
-        self.clock = pygame.time.Clock()
         self._fullscreen = False
         self.background_colour = Config.BG_TOP
-        self.screen.fill(self.background_colour)
         self.particles = []
         self.spatial = SpatialHash(_cfg().GRID_CELL)
-        self._bg_surface = None  # cached gradient
-        self.surfaces = SurfaceCache()
+        self._bg_surface = None
         self._last_sound_ticks = 0
         self.running = True
         self.command = 0
         self.runcount = 0
-        self.audio_enabled = True
-        self.match_start_ticks = pygame.time.get_ticks()
         self.gameover_start_ticks = None
-        ensure_mixer()
         self.collision_sound = None
-        for fname in ('collide.wav', 'click.wav', 'hit.wav'):
-            try:
-                self.collision_sound = pygame.mixer.Sound(sound_path(fname))
-                break
-            except Exception:
-                continue
-        if self.collision_sound is None:
-            self.collision_sound = synth_click()
-        if self.collision_sound is not None:
-            try:
-                self.collision_sound.set_volume(0.7)
-            except Exception:
-                pass
-        self.countdown_sounds = load_countdown_sounds()
-        self._countdown_sound_played = None  # last value we voiced
+        self._countdown_sound_played = None
         self.gameid = uuid.uuid4()
         self.startpos = []
         self.teamSize = 2
@@ -779,30 +761,63 @@ class Arena:
         self.optimizer = StrategyOptimizer()
         from optimizer.perf import PerfLog
         self.perf = PerfLog()
-        if getattr(Config, 'FAST_SIM', False):
-            self.perf._enabled = False
         self.optimizer.w = self
         self._learn = {'phase': 'idle', 'events': [], 'shown': 0}
-        self._learn_pending = True   # first TITLE reads any existing logs
-        self._refresh_stamp()
-        # Toolbar / winner icons
+        self._learn_pending = True
         self.toolbar_icons = {}
         self.winner_icons = {}
-        self.toolbar_font = pygame.font.Font(None, 28)
-        self.toolbar_font_sm = pygame.font.Font(None, 22)
-        self.winner_font = pygame.font.Font(None, 48)
-        self.winner_font_sm = pygame.font.Font(None, 26)
         self._audio_btn_rect = None
-        try:
-            for t, fname in ((ParticleType.ROCK, 'rock.png'),
-                             (ParticleType.PAPER, 'paper.png'),
-                             (ParticleType.SCISSORS, 'scissors.png')):
-                img = pygame.image.load(image_path(fname)).convert_alpha()
-                self.toolbar_icons[t] = pygame.transform.smoothscale(img, (28, 28))
-                self.winner_icons[t] = pygame.transform.smoothscale(img, (64, 64))
-        except Exception:
-            self.toolbar_icons = {}
-            self.winner_icons = {}
+        fast = bool(getattr(Config, 'FAST_SIM', False))
+        if fast:
+            self.screen = None
+            self.clock = None
+            self.surfaces = None
+            self.audio_enabled = False
+            self.countdown_sounds = {}
+            self.toolbar_font = None
+            self.toolbar_font_sm = None
+            self.winner_font = None
+            self.winner_font_sm = None
+            self.match_start_ticks = 0
+            self.perf._enabled = False
+        else:
+            pygame.display.set_caption('Rock Paper Scissors – Forts + Strategy')
+            self.screen = _open_display((width, height), False)
+            self.clock = pygame.time.Clock()
+            self.screen.fill(self.background_colour)
+            self.surfaces = SurfaceCache()
+            self.audio_enabled = True
+            self.match_start_ticks = pygame.time.get_ticks()
+            ensure_mixer()
+            for fname in ('collide.wav', 'click.wav', 'hit.wav'):
+                try:
+                    self.collision_sound = pygame.mixer.Sound(sound_path(fname))
+                    break
+                except Exception:
+                    continue
+            if self.collision_sound is None:
+                self.collision_sound = synth_click()
+            if self.collision_sound is not None:
+                try:
+                    self.collision_sound.set_volume(0.7)
+                except Exception:
+                    pass
+            self.countdown_sounds = load_countdown_sounds()
+            self.toolbar_font = pygame.font.Font(None, 28)
+            self.toolbar_font_sm = pygame.font.Font(None, 22)
+            self.winner_font = pygame.font.Font(None, 48)
+            self.winner_font_sm = pygame.font.Font(None, 26)
+            try:
+                for t, fname in ((ParticleType.ROCK, 'rock.png'),
+                                 (ParticleType.PAPER, 'paper.png'),
+                                 (ParticleType.SCISSORS, 'scissors.png')):
+                    img = pygame.image.load(image_path(fname)).convert_alpha()
+                    self.toolbar_icons[t] = pygame.transform.smoothscale(img, (28, 28))
+                    self.winner_icons[t] = pygame.transform.smoothscale(img, (64, 64))
+            except Exception:
+                self.toolbar_icons = {}
+                self.winner_icons = {}
+        self._refresh_stamp()
 
     @staticmethod
     def team_color(ptype):
@@ -960,6 +975,13 @@ class Arena:
                     if getattr(q, '_clear_split_event', 0):
                         self._endgame_split_events = getattr(self, '_endgame_split_events', 0) + 1
                         q._clear_split_event = 0
+        if getattr(Config, 'FAST_SIM', False):
+            # js_tick already thinks; PY Team.update is live-only.
+            for t in ParticleType:
+                team = self.teams[t]
+                team.members = [p for p in self.particles if p.type == t]
+                team.count = len(team.members)
+            return
         for t in self.teams.values():
             t.update()
 
@@ -1013,17 +1035,17 @@ class Arena:
     def marble_shadow_clip(self, x, y, radius):
         return marble_shadow_clip(self, x, y, radius)
 
-    def draw(self):
+    def tick(self):
+        """One match frame: phase, teams, js_tick. No present in FAST_SIM."""
         perf = getattr(self, 'perf', None)
         if perf is not None:
             perf.begin('frame')
-        # Phase machine (fort intro → particles → countdown → play → outro)
+        fast = bool(getattr(Config, 'FAST_SIM', False))
         if hasattr(self, 'update_match_phase'):
             perf and perf.begin('phase')
             self.update_match_phase()
             perf and perf.end('phase')
         phase = getattr(self, 'phase', MatchPhase.PLAYING)
-        # Keep swimming after match ends until fall starts
         playing = phase in (MatchPhase.PLAYING, MatchPhase.GAMEOVER, MatchPhase.FORTS_OUT)
         countdown = phase == MatchPhase.COUNTDOWN
 
@@ -1038,37 +1060,34 @@ class Arena:
                     team.members = [p for p in self.particles if p.type == t]
                     team.count = len(team.members)
                 self.type_counts = {t: self.teams[t].count for t in ParticleType}
-            perf and perf.begin('spatial')
-            self.spatial.rebuild(self.particles)
-            perf and perf.end('spatial')
+            if not fast:
+                perf and perf.begin('spatial')
+                self.spatial.rebuild(self.particles)
+                perf and perf.end('spatial')
 
-        # Physics + AI: JS-identical tick (arena/js_tick.py).
         if playing and self.particles:
             perf and perf.begin('physics')
-            from arena import js_tick
             js_tick.step(self, move=True)
             perf and perf.end('physics')
         elif countdown and self.particles:
-            from arena import js_tick
             js_tick.step(self, move=False)
 
-        # Presentation (arena.py)
-        if not getattr(Config, 'FAST_SIM', False):
+        if not fast:
             if perf is not None:
                 perf.begin('present')
             present(self)
             if perf is not None:
                 perf.end('present')
-        else:
-            # Headless: never wait on the clock.
-            pass
-        sample_every = 20 if getattr(Config, 'FAST_SIM', False) else 5
+        sample_every = 20 if fast else 5
         if hasattr(self, 'metrics') and self.runcount % sample_every == 0 and not self.gameover():
             self.metrics.sample_modes()
         self.runcount += 1
         if perf is not None:
             perf.end('frame')
             perf.frame_done()
+
+    def draw(self):
+        self.tick()
 
 
     def draw_title_screen(self):

@@ -114,7 +114,7 @@ def learn(n=None):
         frames = 0
         g0 = time.time()
         while w.running and not w.gameover() and frames < 2400:
-            w.draw()
+            w.tick()
             frames += 1
         pending = getattr(w, '_pending_gameover_type', None)
         timed_out = pending is None and frames >= 2400

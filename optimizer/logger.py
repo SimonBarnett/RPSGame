@@ -119,7 +119,7 @@ class Metrics:
         return bag
 
     @classmethod
-    def stamp_welcome(cls, optimizer=None):
+    def stamp_welcome(cls, optimizer=None, stamp_js=None):
         gen = cls.read_generation()
         games = cls.read_games_total()
         if optimizer is not None:
@@ -129,11 +129,17 @@ class Metrics:
                 optimizer.games_seen = games
             except Exception:
                 pass
-        try:
-            from tools.bump_build import write_counters
-            write_counters(gen=gen, games=games, bump_build=False)
-        except Exception as e:
-            print('stamp counters', e, flush=True)
+        if stamp_js is None:
+            try:
+                stamp_js = not bool(getattr(Config, 'FAST_SIM', False))
+            except Exception:
+                stamp_js = True
+        if stamp_js:
+            try:
+                from tools.bump_build import write_counters
+                write_counters(gen=gen, games=games, bump_build=False)
+            except Exception as e:
+                print('stamp counters', e, flush=True)
         return gen, games
 
     @classmethod
@@ -285,13 +291,29 @@ class Metrics:
         def _tail(path, keep):
             if not path or not os.path.isfile(path):
                 return False
-            with open(path, encoding='utf-8') as f:
-                lines = f.read().splitlines()
-            if not lines:
+            try:
+                size = os.path.getsize(path)
+            except Exception:
                 return False
-            header = lines[0]
-            body = lines[1:]
-            if len(body) <= keep:
+            header = ''
+            body = []
+            try:
+                with open(path, 'rb') as f:
+                    header = f.readline().decode('utf-8', errors='replace').rstrip('\r\n')
+                    if size < 2_000_000:
+                        rest = f.read().decode('utf-8', errors='replace')
+                        body = [ln for ln in rest.splitlines() if ln]
+                    else:
+                        chunk = min(size, max(65536, (keep + 8) * 4096))
+                        f.seek(max(0, size - chunk))
+                        data = f.read().decode('utf-8', errors='replace')
+                        lines = data.splitlines()
+                        if lines and lines[0] != header:
+                            lines = lines[1:]
+                        body = [ln for ln in lines if ln]
+            except Exception:
+                return False
+            if not header or len(body) <= keep:
                 return False
             text = header + '\n' + '\n'.join(body[-keep:]) + '\n'
             self._safe_write(path, text)
@@ -310,6 +332,21 @@ class Metrics:
                 self.w.optimizer._log_raw('consumed metrics cleared (%s files)' % n_cleared)
         except Exception:
             pass
+
+    def _match_time_s(self):
+        """Sim seconds. FAST_SIM uses ticks (dummy pygame clock is wall time)."""
+        if getattr(Config, 'FAST_SIM', False):
+            rc = float(getattr(self.w, 'runcount', 0) or 0)
+            return round(rc / 60.0, 2)
+        try:
+            if getattr(self.w, 'frozen_match_ms', 0):
+                return round(self.w.frozen_match_ms / 1000.0, 2)
+            if self.w.match_start_ticks is not None:
+                return round((pygame.time.get_ticks() - self.w.match_start_ticks) / 1000.0, 2)
+        except Exception:
+            pass
+        rc = float(getattr(self.w, 'runcount', 0) or 0)
+        return round(rc / 60.0, 2)
 
     def reset_match(self):
         self.conversions = []
@@ -359,7 +396,7 @@ class Metrics:
             sbag[state] = sbag.get(state, 0) + 1
         # Population time-series for relative size learning (~every 30 samples)
         self._pop_sample_i = getattr(self, '_pop_sample_i', 0) + 1
-        if self._pop_sample_i % 30 == 0 and self.w.match_start_ticks:
+        if self._pop_sample_i % 30 == 0:
             rc = self.w.type_counts
             rock = rc.get(ParticleType.ROCK, 0)
             paper = rc.get(ParticleType.PAPER, 0)
@@ -373,10 +410,7 @@ class Metrics:
             def risk(t):
                 return int(rc.get(PREY_OF[t], 0) <= 0 and rc.get(FEAR_OF[t], 0) > 0 and rc.get(t, 0) > 0)
             any_risk = int(risk(ParticleType.ROCK) or risk(ParticleType.PAPER) or risk(ParticleType.SCISSORS))
-            try:
-                t_s = round((pygame.time.get_ticks() - self.w.match_start_ticks) / 1000.0, 2)
-            except Exception:
-                t_s = 0
+            t_s = self._match_time_s()
             modes = {t.name: self.w.teams[t].mode.name for t in ParticleType}
             line = ','.join(str(x) for x in [
                 str(self.w.gameid), t_s, self.w.runcount, self.w.teamSize,
@@ -387,7 +421,11 @@ class Metrics:
                 modes['ROCK'], modes['PAPER'], modes['SCISSORS'],
                 any_risk,
             ]) + chr(10)
-            self._safe_append(self.POP_CSV, line)
+            buf = getattr(self, '_pop_buf', None)
+            if buf is None:
+                self._pop_buf = []
+                buf = self._pop_buf
+            buf.append(line)
 
     def _flank_imbalance(self, win):
         team = win.get_team() if hasattr(win, 'get_team') else None
@@ -514,7 +552,7 @@ class Metrics:
             lose.starttype.name if hasattr(lose, 'starttype') else '?')
         row = {
             'gameid': str(self.w.gameid),
-            'time_s': round((pygame.time.get_ticks() - self.w.match_start_ticks) / 1000.0, 2),
+            'time_s': self._match_time_s(),
             'runcount': self.w.runcount,
             'teamSize': self.w.teamSize,
             'winner_type': tname,
@@ -906,11 +944,17 @@ class Metrics:
                 self._conv_buf = []
                 buf = self._conv_buf
             buf.append(line)
-            if len(buf) >= 8:
-                self._safe_append(self.CONV_CSV, ''.join(buf))
-                self._conv_buf = []
         except Exception:
             pass
+
+    def flush_pop_buf(self):
+        buf = getattr(self, '_pop_buf', None)
+        if buf:
+            try:
+                self._safe_append(self.POP_CSV, ''.join(buf))
+            except Exception:
+                pass
+            self._pop_buf = []
 
     def flush_conv_buf(self):
         buf = getattr(self, '_conv_buf', None)
@@ -920,21 +964,12 @@ class Metrics:
             except Exception:
                 pass
             self._conv_buf = []
+        self.flush_pop_buf()
 
     def log_gameover(self, winner_type):
         self.flush_conv_buf()
 
-        if getattr(self.w, 'frozen_match_ms', 0):
-            duration_s = round(self.w.frozen_match_ms / 1000.0, 2)
-        elif self.w.match_start_ticks is not None:
-            duration_s = round((pygame.time.get_ticks() - self.w.match_start_ticks) / 1000.0, 2)
-        else:
-            duration_s = 0.0
-        # FAST_SIM / dummy driver: pygame clock is not wall time. Use ticks.
-        if duration_s <= 0.0:
-            rc = float(getattr(self.w, 'runcount', 0) or 0)
-            fps = float(getattr(Config, 'FPS', 0) or getattr(Config, 'TARGET_FPS', 0) or 60) or 60.0
-            duration_s = round(rc / fps, 2)
+        duration_s = self._match_time_s()
         counts = {t.name: self.w.type_counts.get(t, 0) for t in ParticleType}
         conv_by = {'ROCK': 0, 'PAPER': 0, 'SCISSORS': 0}
         for c in self.conversions:
