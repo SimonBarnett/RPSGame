@@ -1,28 +1,30 @@
 {
   "shares": {
-    "ROCK": 0.275,
-    "PAPER": 0.175,
-    "SCISSORS": 0.55
+    "ROCK": 0.3,
+    "PAPER": 0.075,
+    "SCISSORS": 0.625
   },
   "n": 40,
-  "games_seen": 8754,
+  "games_seen": 9400,
   "identity": {
     "ROCK": {
-      "speed_base": 1.0946,
-      "turn_base": 13.7875
+      "speed_base": 1.08,
+      "turn_base": 16.2
     },
     "PAPER": {
-      "speed_base": 1.88,
-      "turn_base": 13.0
+      "speed_base": 2.0,
+      "turn_base": 13.8
     },
     "SCISSORS": {
-      "speed_base": 1.22,
-      "turn_base": 13.35
+      "speed_base": 1.18,
+      "turn_base": 14.15
     }
   },
   "changes": [
-    "ROCK.speed_base: 1.080 -> 1.095  (motion-balance share=0.275)",
-    "ROCK.turn_base: 13.70 -> 13.79  (motion-balance share=0.275)"
+    "ROCK.speed_base: 1.101 -> 1.080  (motion-balance share=0.300)",
+    "ROCK.turn_base: 16.20 -> 16.20  (motion-balance share=0.300)",
+    "SCISSORS.speed_base: 1.181 -> 1.180  (motion-balance share=0.625)",
+    "SCISSORS.turn_base: 14.15 -> 14.15  (motion-balance share=0.625)"
   ],
-  "overlays_seeded": 45
+  "overlays_seeded": 96
 }

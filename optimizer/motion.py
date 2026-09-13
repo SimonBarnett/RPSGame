@@ -27,11 +27,12 @@ MIN_N = 12
 COOLDOWN_GAMES = 8
 SPEED_STEP = 0.020
 TURN_STEP = 0.12
-SPEED_BOUNDS = {"ROCK": (1.08, 1.40), "SCISSORS": (1.22, 1.55), "PAPER": (1.48, 1.88)}
-TURN_BOUNDS = {"PAPER": (11.2, 13.0), "SCISSORS": (12.2, 14.0), "ROCK": (13.4, 16.0)}
+SPEED_BOUNDS = {"ROCK": (1.08, 1.42), "SCISSORS": (1.18, 1.55), "PAPER": (1.48, 2.00)}
+TURN_BOUNDS = {"PAPER": (11.2, 13.8), "SCISSORS": (12.2, 14.5), "ROCK": (13.4, 16.2)}
 MIN_SPEED_GAP = 0.08
 MIN_TURN_GAP = 0.35
 TARGET = 1.0 / 3.0
+CRISIS_SHARE = 0.15
 
 
 def _shares(path=GAMES, window=WINDOW):
@@ -115,20 +116,33 @@ def _nudge(ident, shares):
     Paper behind: +speed (kite Rock) AND +turn (don't get chord-cut by Scissors).
     Rock behind: +turn (pin Scissors) AND +speed (less kited by Paper).
     Ahead: the reverse. Triangle clamp keeps identity order.
+    Paper share near 0: skip Scissors damp and take a bigger step.
     """
     changes = []
-    for name, sh in shares.items():
+    crisis = float(shares.get("PAPER", 1.0)) < CRISIS_SHARE
+    names = ("ROCK", "SCISSORS", "PAPER") if crisis else ("ROCK", "PAPER", "SCISSORS")
+    for name in names:
+        sh = float(shares.get(name, TARGET))
         err = sh - TARGET
-        if abs(err) < 0.04:
+        if crisis and name == "ROCK":
+            # Unpin Scissors min-speed so Scissors can slow vs Paper.
+            ds, dt = -SPEED_STEP * 2.0, 0.0
+        elif crisis and name == "SCISSORS":
+            # Slow the hunter; do not cut turn (that drags Paper turn down).
+            ds, dt = -SPEED_STEP * 2.5, 0.0
+        elif crisis and name == "PAPER":
+            ds, dt = SPEED_STEP * 1.5, TURN_STEP * 2.0
+        elif abs(err) < 0.04:
             continue
-        mag = min(2.0, abs(err) / 0.08)
-        if err < 0:
-            ds, dt = SPEED_STEP * mag, TURN_STEP * mag
         else:
-            ds, dt = -SPEED_STEP * mag, -TURN_STEP * mag
-        if name == "SCISSORS":
-            ds *= 0.6
-            dt *= 0.6
+            mag = min(2.0, abs(err) / 0.08)
+            if err < 0:
+                ds, dt = SPEED_STEP * mag, TURN_STEP * mag
+            else:
+                ds, dt = -SPEED_STEP * mag, -TURN_STEP * mag
+            if name == "SCISSORS":
+                ds *= 0.6
+                dt *= 0.6
         before = (ident[name]["speed_base"], ident[name]["turn_base"])
         ident[name]["speed_base"] += ds
         ident[name]["turn_base"] += dt
@@ -258,23 +272,82 @@ def _seed_overlay_files(ident):
     return n
 
 
-def apply(log=None, games_seen=0):
+def _sync_play_motion(ident):
+    """Keep js_tick + rps.js DEFAULT_MOTION in lockstep with identity."""
+    blob_py = (
+        "DEFAULT_MOTION = {\n"
+        "    'ROCK': {'speed': %.4f, 'turn': %.4f},\n"
+        "    'PAPER': {'speed': %.4f, 'turn': %.4f},\n"
+        "    'SCISSORS': {'speed': %.4f, 'turn': %.4f},\n"
+        "}"
+        % (
+            ident["ROCK"]["speed_base"], ident["ROCK"]["turn_base"],
+            ident["PAPER"]["speed_base"], ident["PAPER"]["turn_base"],
+            ident["SCISSORS"]["speed_base"], ident["SCISSORS"]["turn_base"],
+        )
+    )
+    blob_js = (
+        "  const DEFAULT_MOTION = {\n"
+        "    ROCK: { speed: %.4f, turn: %.4f },\n"
+        "    PAPER: { speed: %.4f, turn: %.4f },\n"
+        "    SCISSORS: { speed: %.4f, turn: %.4f }\n"
+        "  };"
+        % (
+            ident["ROCK"]["speed_base"], ident["ROCK"]["turn_base"],
+            ident["PAPER"]["speed_base"], ident["PAPER"]["turn_base"],
+            ident["SCISSORS"]["speed_base"], ident["SCISSORS"]["turn_base"],
+        )
+    )
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    py_path = os.path.join(root, "arena", "js_tick.py")
+    js_path = os.path.join(root, "rps_pub", "rps.js")
+    try:
+        text = open(py_path, encoding="utf-8").read()
+        text2, n = re.subn(
+            r"DEFAULT_MOTION = \{.*?\n\}", blob_py, text, count=1, flags=re.S)
+        if n:
+            open(py_path, "w", encoding="utf-8", newline="\n").write(text2)
+    except Exception:
+        pass
+    try:
+        text = open(js_path, encoding="utf-8").read()
+        text2, n = re.subn(
+            r"  const DEFAULT_MOTION = \{[\s\S]*?\n  \};", blob_js, text, count=1)
+        if n:
+            open(js_path, "w", encoding="utf-8", newline="\n").write(text2)
+    except Exception:
+        pass
+    try:
+        import arena.js_tick as js_tick
+        js_tick.DEFAULT_MOTION = {
+            "ROCK": {"speed": ident["ROCK"]["speed_base"], "turn": ident["ROCK"]["turn_base"]},
+            "PAPER": {"speed": ident["PAPER"]["speed_base"], "turn": ident["PAPER"]["turn_base"]},
+            "SCISSORS": {"speed": ident["SCISSORS"]["speed_base"], "turn": ident["SCISSORS"]["turn_base"]},
+        }
+    except Exception:
+        pass
+
+
+def apply(log=None, games_seen=0, force=False):
     """One constrained motion step. Returns list of change strings."""
     shares, n = _shares()
     if n < MIN_N:
         return []
     prev = _read_state()
     prev_gs = int(prev.get("games_seen") or 0)
-    if games_seen and prev_gs and (int(games_seen) - prev_gs) < COOLDOWN_GAMES:
+    crisis = float((shares or {}).get("PAPER", 1.0) or 0.0) < CRISIS_SHARE
+    if (not force) and (not crisis) and games_seen and prev_gs and (
+            int(games_seen) - prev_gs) < COOLDOWN_GAMES:
         return []
     ident = _clamp_triangle(_read_identity())
     ident, changes = _nudge(ident, shares)
     if not changes:
-        # still sync overlays so identity is what the sim runs
         _sync_runtime(ident)
+        _sync_play_motion(ident)
         return []
     _write_config(ident)
     _sync_runtime(ident)
+    _sync_play_motion(ident)
     seeded = _seed_overlay_files(ident)
     try:
         os.makedirs(METRICS, exist_ok=True)

@@ -64,7 +64,7 @@ class Config:
     MARBLE_ROLL_STEP = 12         # degrees – cached roll buckets
     MARBLE_ROLL_GAIN = 1.0        # roll radians = gain * distance / radius
     # Play clock (js_tick / rps.js) uses MASS + 2D impulse; these are docs.
-    MARBLE_MASS = {'ROCK': 1.35, 'SCISSORS': 1.0, 'PAPER': 0.72}
+    MARBLE_MASS = {'ROCK': 1.35, 'SCISSORS': 0.88, 'PAPER': 0.95}
     MARBLE_SLIP_DAMP = 0.18
     MARBLE_SPIN_DAMP = 0.985
     MARBLE_PAIR_FRICTION = 0.32
@@ -281,7 +281,7 @@ class Role(Enum):
 TYPE_IDENTITY = {
     "ROCK": {
         "speed_base": 1.0800,
-        "turn_base": 13.7299,
+        "turn_base": 16.2000,
         "size": 20,
         "strength_range": (-0.2, 0.3),
         "agility_range": (-2.0, 4.0),
@@ -293,8 +293,8 @@ TYPE_IDENTITY = {
         "color": (236, 78, 108),
     },
     "PAPER": {
-        "speed_base": 1.8800,
-        "turn_base": 13.0000,
+        "speed_base": 2.0000,
+        "turn_base": 13.8000,
         "size": 20,
         "strength_range": (-0.25, 0.25),
         "agility_range": (-4.0, 2.0),
@@ -306,8 +306,8 @@ TYPE_IDENTITY = {
         "color": (247, 196, 48),
     },
     "SCISSORS": {
-        "speed_base": 1.2200,
-        "turn_base": 13.3500,
+        "speed_base": 1.1800,
+        "turn_base": 14.1500,
         "size": 20,
         "strength_range": (-0.22, 0.28),
         "agility_range": (-3.0, 3.0),

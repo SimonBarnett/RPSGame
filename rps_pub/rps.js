@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 27, gen: 19, games: 9322, at: "2026-09-13 09:06Z", sha: "246383f" };
+  const BUILD = { n: 28, gen: 57, games: 9429, at: "2026-09-13 09:44Z", sha: "0dbd194" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -26,9 +26,9 @@
     SCISSORS: [70, 178, 230]
   };
   const DEFAULT_MOTION = {
-    ROCK: { speed: 1.22, turn: 14.06 },
-    PAPER: { speed: 1.76, turn: 12.06 },
-    SCISSORS: { speed: 1.33, turn: 12.84 }
+    ROCK: { speed: 1.0800, turn: 16.2000 },
+    PAPER: { speed: 2.0000, turn: 13.8000 },
+    SCISSORS: { speed: 1.1800, turn: 14.1500 }
   };
   const CRUISE_MULT = 5.5;
   const LAST_MAN_FEAR_SPEED = 1.25;
@@ -55,7 +55,7 @@
   const SLIP_DAMP = 0.42;
   const SPIN_DAMP = 0.985;
   const THRUST = 0.22;
-  const MASS = { ROCK: 1.35, SCISSORS: 1.0, PAPER: 0.72 };
+  const MASS = { ROCK: 1.35, SCISSORS: 0.88, PAPER: 0.95 };
   const FORT_STAGGER_MS = 90;
   const FORT_INTRO_MS = 900;
   const FORT_OUTRO_MS = 800;

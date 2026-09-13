@@ -16,9 +16,9 @@ FEAR_N = {'ROCK': 'PAPER', 'PAPER': 'SCISSORS', 'SCISSORS': 'ROCK'}
 CRUISE_MULT = 5.5
 LAST_MAN_FEAR_SPEED = 1.25
 DEFAULT_MOTION = {
-    'ROCK': {'speed': 1.22, 'turn': 14.06},
-    'PAPER': {'speed': 1.76, 'turn': 12.06},
-    'SCISSORS': {'speed': 1.33, 'turn': 12.84},
+    'ROCK': {'speed': 1.0800, 'turn': 16.2000},
+    'PAPER': {'speed': 2.0000, 'turn': 13.8000},
+    'SCISSORS': {'speed': 1.1800, 'turn': 14.1500},
 }
 WALL_RESTITUTION = 0.92
 PAIR_RESTITUTION = 0.35
@@ -33,7 +33,7 @@ SEPARATION_SLOP = 0.5
 SLIP_DAMP = 0.42
 SPIN_DAMP = 0.985
 THRUST = 0.22
-MASS = {'ROCK': 1.35, 'SCISSORS': 1.0, 'PAPER': 0.72}
+MASS = {'ROCK': 1.35, 'SCISSORS': 0.88, 'PAPER': 0.95}
 FEAR_BUILD = 0.35
 FEAR_DECAY = 0.04
 FEAR_DECAY_FAST = 0.18
