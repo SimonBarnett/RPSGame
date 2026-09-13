@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 41, gen: 420, games: 10248, at: "2026-09-13 19:25Z", sha: "bd8d293" };
+  const BUILD = { n: 42, gen: 423, games: 10259, at: "2026-09-13 19:34Z", sha: "f94c1f6" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -966,7 +966,7 @@
   }
   function huntHeading(p, prey, look, fearD) {
     if (!prey) return null;
-    if (p.type === 'ROCK' && (fearD == null || fearD > p.size * 10)) return interceptHeading(p, prey, 'lead');
+    if ((p.type === 'ROCK' || p.type === 'PAPER') && (fearD == null || fearD > p.size * 10)) return interceptHeading(p, prey, 'lead');
     return chaseHeading(p, prey, look);
   }
   /** Chase only if convert ETA beats predator ETA (maths/time.py). */
@@ -1602,8 +1602,8 @@
         if (kite != null) { want = kite; mode = 'chase'; }
       }
       if (want != null) {
-        const cone = fearClumpSteer(p, want);
-        if (cone != null) { want = cone; mode = 'evade'; }
+        const steered = fearClumpSteer(p, want);
+        if (steered) { want = steered.h; if (steered.close) mode = 'evade'; }
       }
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
@@ -1623,12 +1623,9 @@
       if (nearN >= 3) want = blendHeadings(want, desyncHeading(p, prey && prey.obj), 0.3);
 
       // evasion brake / reverse (Python apply_evasion, compact)
-      // Only while still driving into the predator — keep speed to kite around.
       if (mode === 'evade' && fear && fear.d < p.size * 6) {
-        const fearH = headingTo(p.x, p.y, fear.obj.x, fear.obj.y);
-        const facingIn = Math.abs(angDiff(p.angle, fearH)) < 0.6;
-        const wantIn = Math.abs(angDiff(want != null ? want : p.angle, fearH)) < 0.6;
-        if (facingIn && wantIn) p.speed *= 0.72;
+        const ahead = Math.abs(angDiff(p.angle, headingTo(p.x, p.y, fear.obj.x, fear.obj.y)));
+        if (ahead < 0.6) p.speed *= 0.72;
       }
 
       for (let fi = 0; fi < forts.length; fi++) {
@@ -1751,10 +1748,10 @@
       const minN = (wary || p.state === 'LAST_MAN') ? 1 : 2;
       if (n < minN) return null;
       const cx = sx / n, cy = sy / n;
-      if (close) return angNorm(headingTo(p.x, p.y, cx, cy) + Math.PI);
+      if (close) return { h: angNorm(headingTo(p.x, p.y, cx, cy) + Math.PI), close: true };
       const ch = headingTo(p.x, p.y, cx, cy);
       const sign = (p.id % 2) ? 1 : -1;
-      return blendHeadings(want, angNorm(ch + sign * (Math.PI * 0.5)), 0.85);
+      return { h: blendHeadings(want, angNorm(ch + sign * (Math.PI * 0.5)), 0.85), close: false };
     }
 
     function victorySteer(p, dance, tick) {

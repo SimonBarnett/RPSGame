@@ -494,7 +494,7 @@ def intercept_heading(p, prey, mode):
 def hunt_heading(p, prey, look, tn, fear_d=None):
     if prey is None:
         return None
-    if tn == 'ROCK' and (fear_d is None or fear_d > p.size * 10.0):
+    if tn in ('ROCK', 'PAPER') and (fear_d is None or fear_d > p.size * 10.0):
         return intercept_heading(p, prey, 'lead')
     return chase_heading(p, prey, look)
 
@@ -569,11 +569,11 @@ def _fear_clump_steer(p, particles, prey_t, want):
         return None
     cx, cy = sx / n, sy / n
     if close:
-        return ang_norm(heading_to(p.x, p.y, cx, cy) + math.pi)
+        return ang_norm(heading_to(p.x, p.y, cx, cy) + math.pi), True
     ch = heading_to(p.x, p.y, cx, cy)
     sign = 1.0 if (_pid(p) % 2) else -1.0
     around = ang_norm(ch + sign * (math.pi * 0.5))
-    return blend_headings(want, around, 0.85)
+    return blend_headings(want, around, 0.85), False
 
 
 def _kite_prey_away_from_fear(p, prey, fear, loose=False):
@@ -1306,10 +1306,11 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             want = kite
             mode = 'chase'
     if want is not None:
-        cone = _fear_clump_steer(p, world.particles, prey_t, want)
-        if cone is not None:
-            want = cone
-            mode = 'evade'
+        steered = _fear_clump_steer(p, world.particles, prey_t, want)
+        if steered is not None:
+            want, close = steered
+            if close:
+                mode = 'evade'
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])
@@ -1328,11 +1329,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     if near_n >= 3:
         want = blend_headings(want, desync_heading(p, prey['obj'] if prey else None), 0.3)
     if mode == 'evade' and fear and fear['d'] < p.size * 6:
-        fear_h = heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y)
-        facing_in = abs(ang_diff(p.angle, fear_h)) < 0.6
-        want_in = abs(ang_diff(want if want is not None else p.angle, fear_h)) < 0.6
-        # Brake only while still driving into the predator. Keep speed to kite around.
-        if facing_in and want_in:
+        ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y)))
+        if ahead < 0.6:
             p.speed *= 0.72
     for f in forts or ():
         if _fort_scale(f) < 0.85:
