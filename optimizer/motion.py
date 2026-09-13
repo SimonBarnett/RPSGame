@@ -9,6 +9,8 @@ The live sim reads TYPE_DEFAULTS (overlay base last-writer), NOT TYPE_IDENTITY
 alone. This module writes identity + TYPE_DEFAULTS + every overlay base.
 
 Called from engine.optimise() each learn pass.
+
+FROZEN: do not nudge speed/turn. Identity stays whatever is on disk.
 """
 from __future__ import annotations
 
@@ -33,6 +35,7 @@ MIN_SPEED_GAP = 0.08
 MIN_TURN_GAP = 0.35
 TARGET = 1.0 / 3.0
 CRISIS_SHARE = 0.15
+FROZEN = True
 
 
 def _shares(path=GAMES, window=WINDOW):
@@ -330,6 +333,13 @@ def _sync_play_motion(ident):
 
 def apply(log=None, games_seen=0, force=False):
     """One constrained motion step. Returns list of change strings."""
+    if FROZEN:
+        if log:
+            try:
+                log('motion-balance frozen — no speed/turn nudges')
+            except Exception:
+                pass
+        return []
     shares, n = _shares()
     if n < MIN_N:
         return []

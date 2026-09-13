@@ -2388,17 +2388,7 @@ class StrategyOptimizer:
         self._log_changes(sample, wins, avg_dur)
         # Dirty-only persist. force=True rewrites 90+ JSON files and is the
         # 0.7–1.3s persist spike. Full rewrite only every 40 games.
-        try:
-            from optimizer import motion as _motion
-            _mc = _motion.apply(log=self._log_raw,
-                                games_seen=int(getattr(self, 'games_seen', 0) or 0))
-            if _mc:
-                self.last_changes = list(self.last_changes or []) + list(_mc)
-        except Exception as _me:
-            try:
-                self._log_raw('motion-balance failed: %s' % _me)
-            except Exception:
-                pass
+        # Motion triangle is frozen — optimizer.motion.FROZEN.
 
         if persist:
             try:
