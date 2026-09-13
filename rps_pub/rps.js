@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 23, gen: 16, games: 9297, at: "2026-09-13 07:52Z", sha: "5aee398" };
+  const BUILD = { n: 24, gen: 16, games: 9297, at: "2026-09-13 07:55Z", sha: "5fda70a" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1534,12 +1534,12 @@
         if (fd < p.size * 4.5) { want = flee; mode = 'evade'; }
         else if (fd < p.size * 6.5 && (fd < pd || inPath)) want = blendHeadings(want, flee, 0.65);
       }
-      if (state !== 'NEAR_WIPE' && want != null) {
-        const cone = fearClumpSteer(p, want);
-        if (cone != null) { want = cone; mode = 'evade'; }
-      }
       if (state === 'NEAR_WIPE' && fear && fear.obj && fear.d < p.size * 8) {
         want = blendHeadings(want, interceptHeading(p, fear.obj, 'lead'), 0.55);
+      }
+      if (want != null) {
+        const cone = fearClumpSteer(p, want);
+        if (cone != null) { want = cone; mode = 'evade'; }
       }
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);

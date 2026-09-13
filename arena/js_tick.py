@@ -1166,15 +1166,15 @@ def think(world, p, counts, W, H, pad, world_k, forts):
             mode = 'evade'
         elif fd < p.size * 6.5 and (fd < pd or in_path):
             want = blend_headings(want, flee, 0.65)
-    if state != 'NEAR_WIPE' and want is not None:
-        cone = _fear_clump_steer(p, world.particles, prey_t, want)
-        if cone is not None:
-            want = cone
-            mode = 'evade'
     if state == 'NEAR_WIPE' and fear and fear.get('obj') is not None:
         fd = float(fear.get('d') or 1e9)
         if fd < p.size * 8:
             want = blend_headings(want, intercept_heading(p, fear['obj'], 'lead'), 0.55)
+    if want is not None:
+        cone = _fear_clump_steer(p, world.particles, prey_t, want)
+        if cone is not None:
+            want = cone
+            mode = 'evade'
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])
