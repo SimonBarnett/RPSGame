@@ -534,7 +534,8 @@ def _fear_clump_steer(p, particles, prey_t, want):
         n += 1
         if d < p.size * 4.5:
             close = True
-    if n < 2:
+    min_n = 1 if getattr(p, 'state', None) == 'LAST_MAN' else 2
+    if n < min_n:
         return None
     cx, cy = sx / n, sy / n
     if close:
@@ -598,7 +599,14 @@ def apply_moves(want, steps, ctx):
             lst = [{'fn': 'sectors.chase_heading', 'blend': 0.85}] + lst
     elif state in ('LAST_MAN', 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE'):
         keep = [{'fn': 'sectors.orient', 'blend': 0.8}]
-        raid = (state == 'LAST_MAN' and prey_n > 0) or state == 'NEAR_WIPE'
+        fear_d = 1e9
+        fr = ctx.get('fear')
+        if isinstance(fr, dict) and fr.get('d') is not None:
+            fear_d = float(fr.get('d') or 1e9)
+        raid = (
+            (state == 'LAST_MAN' and prey_n > 0 and (fear_n <= 0 or fear_d > p.size * 10))
+            or state == 'NEAR_WIPE'
+        )
         for s in lst:
             fn = str((s or {}).get('fn') or '')
             if (not raid) and fn.startswith(('orbit.', 'time.', 'intercept.')):
@@ -1166,6 +1174,9 @@ def think(world, p, counts, W, H, pad, world_k, forts):
             mode = 'evade'
         elif fd < p.size * 6.5 and (fd < pd or in_path):
             want = blend_headings(want, flee, 0.65)
+        if state == 'LAST_MAN' and fd < p.size * 9:
+            want = flee
+            mode = 'evade'
     if state == 'NEAR_WIPE' and fear and fear.get('obj') is not None:
         fd = float(fear.get('d') or 1e9)
         if fd < p.size * 8:

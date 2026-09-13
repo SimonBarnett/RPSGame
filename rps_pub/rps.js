@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 24, gen: 16, games: 9297, at: "2026-09-13 07:55Z", sha: "5fda70a" };
+  const BUILD = { n: 25, gen: 16, games: 9297, at: "2026-09-13 08:00Z", sha: "eda7aac" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1018,7 +1018,9 @@
       }
     } else if (state === 'LAST_MAN' || state === 'NO_PREY_FEAR_ALIVE' || state === 'NEAR_WIPE') {
       const keep = [{ fn: 'sectors.orient', blend: 0.8 }];
-      const raid = (state === 'LAST_MAN' && ctx.preyN > 0) || state === 'NEAR_WIPE';
+      const fearD = (ctx.fear && ctx.fear.d != null) ? ctx.fear.d : 1e9;
+      const raid = (state === 'LAST_MAN' && ctx.preyN > 0 && (ctx.fearN <= 0 || fearD > p.size * 10))
+        || state === 'NEAR_WIPE';
       list.forEach(function (s) {
         const fn = String((s || {}).fn || '');
         if (!raid && (fn.indexOf('orbit.') === 0 || fn.indexOf('time.') === 0 || fn.indexOf('intercept.') === 0)) return;
@@ -1533,6 +1535,7 @@
         const inPath = Math.abs(angDiff(want != null ? want : p.angle, fearH)) < 0.9;
         if (fd < p.size * 4.5) { want = flee; mode = 'evade'; }
         else if (fd < p.size * 6.5 && (fd < pd || inPath)) want = blendHeadings(want, flee, 0.65);
+        if (state === 'LAST_MAN' && fd < p.size * 9) { want = flee; mode = 'evade'; }
       }
       if (state === 'NEAR_WIPE' && fear && fear.obj && fear.d < p.size * 8) {
         want = blendHeadings(want, interceptHeading(p, fear.obj, 'lead'), 0.55);
@@ -1660,7 +1663,8 @@
         sx += q.x; sy += q.y; n++;
         if (d < p.size * 4.5) close = true;
       }
-      if (n < 2) return null;
+      const minN = (p.state === 'LAST_MAN') ? 1 : 2;
+      if (n < minN) return null;
       const cx = sx / n, cy = sy / n;
       if (close) return angNorm(headingTo(p.x, p.y, cx, cy) + Math.PI);
       const ch = headingTo(p.x, p.y, cx, cy);
