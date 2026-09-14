@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 71, gen: 1090, games: 11952, at: "2026-09-14 07:33Z", sha: "bff4b78" };
+  const BUILD = { n: 72, gen: 1129, games: 12037, at: "2026-09-14 08:03Z", sha: "a0f6ec7" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1747,7 +1747,7 @@
         const along = vx * ux + vy * uy;
         if (along <= 0 || along > reach) return false;
         const closest = Math.hypot(vx - ux * along, vy - uy * along);
-        return closest < p.size * 3;
+        return closest < p.size * 2;
       };
       if (!prey) {
         if (dNear < p.size * 6 || ram(want)) return angNorm(nearH + Math.PI);
