@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 103, gen: 1878, games: 14065, at: "2026-09-14 22:57Z", sha: "1016d36" };
+  const BUILD = { n: 104, gen: 1899, games: 14105, at: "2026-09-14 23:54Z", sha: "d149561" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1675,7 +1675,7 @@
       if (pDelay) {
         want = safeH;
         const rock = nearest(p, preyT);
-        if (rock && rock.obj) want = noCloseOn(p, want, rock.obj, rock.d, 5);
+        if (rock && rock.obj) want = noCloseOn(p, want, rock.obj, rock.d, 10);
         if (fear && fear.obj) want = noCloseOn(p, want, fear.obj, fear.d, 8);
       }
       if (want != null) {

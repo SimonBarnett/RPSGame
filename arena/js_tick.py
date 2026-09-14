@@ -1537,7 +1537,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         want = safe_h
         rock = nearest(p, prey_t, prey_pool)
         if rock and rock.get('obj') is not None:
-            want = _no_close_on(p, want, rock['obj'], float(rock.get('d') or 1e9), 5.0)
+            want = _no_close_on(p, want, rock['obj'], float(rock.get('d') or 1e9), 10.0)
         if fear and fear.get('obj') is not None:
             want = _no_close_on(p, want, fear['obj'], float(fear.get('d') or 1e9), 8.0)
     if want is not None:
