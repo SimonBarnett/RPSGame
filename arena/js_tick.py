@@ -636,9 +636,10 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
         return want
     hunt = heading_to(p.x, p.y, prey.x, prey.y)
     pd = math.hypot(prey.x - p.x, prey.y - p.y)
-    # Charge Rock when the pack is not on the line. No per-Scissors rays.
+    # Charge Rock when the pack is not on the line. Nearby off-axis Scissors
+    # do not veto (ram stays for no-prey / wrap headings only).
     beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
-    if not _ram(hunt) and (beside or not _clips(hunt, pd)):
+    if beside or not _clips(hunt, pd):
         return hunt
     # Pack is in front of Rock: tangent around. Do not cut the corner through the hull.
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
