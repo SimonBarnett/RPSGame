@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 64, gen: 844, games: 11390, at: "2026-09-14 04:15Z", sha: "c5bfeff" };
+  const BUILD = { n: 65, gen: 866, games: 11438, at: "2026-09-14 04:34Z", sha: "40c28af" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1758,14 +1758,12 @@
       const beside = Math.abs(angDiff(hunt, packH)) > Math.PI * 0.5;
       if (beside || !clips(hunt, pd)) return hunt;
       const sign = angDiff(packH, hunt) >= 0 ? 1 : -1;
+      const minOff = Math.max(1.15, Math.atan2(packR + p.size * 6, Math.max(dPack, p.size)));
+      const around = angNorm(packH + sign * minOff);
+      if (!ram(around)) return around;
       const tangent = angNorm(packH + sign * Math.PI * 0.5);
       if (!ram(tangent)) return tangent;
-      const minOff = Math.max(1.15, Math.atan2(packR + p.size * 6, Math.max(dPack, p.size)));
-      const left = angNorm(packH + minOff);
-      const right = angNorm(packH - minOff);
-      const h = Math.abs(angDiff(left, hunt)) <= Math.abs(angDiff(right, hunt)) ? left : right;
-      if (!ram(h)) return h;
-      return tangent;
+      return around;
     }
 
     function avoidFearOverlap(p, want) {
