@@ -638,11 +638,10 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     if hunt is None:
         hunt = heading_to(p.x, p.y, prey.x, prey.y)
     pd = math.hypot(prey.x - p.x, prey.y - p.y)
-    # Charge Rock when the pack is not on the line. A Scissors already in
-    # the hunt cone is on the line: wrap around it, do not fly through.
+    # Charge Rock when the pack centroid is not on the line. Do not treat a
+    # nearby off-axis Scissors as blocking the charge.
     beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
-    near_in_front = d_near < p.size * 5.0 and abs(ang_diff(hunt, near_h)) < 0.50
-    if (beside or not _clips(hunt, pd)) and not near_in_front:
+    if beside or not _clips(hunt, pd):
         return hunt
     # Pack is on the line: wrap around the hull toward Rock, not a 90° orbit
     # and not through the pack.
