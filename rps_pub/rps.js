@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 96, gen: 1751, games: 13783, at: "2026-09-14 19:38Z", sha: "61f36cf" };
+  const BUILD = { n: 97, gen: 1771, games: 13835, at: "2026-09-14 19:54Z", sha: "5294c37" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1366,7 +1366,7 @@
       return best ? { obj: best, d: Math.sqrt(bestD) } : null;
     }
     function safestPrey(p, preyT, fearT) {
-      let best = null, bestS = -1e18;
+      let best = null, bestS = -1e18, bestFd = 0;
       const sz = p.size;
       for (let i = 0; i < particles.length; i++) {
         const prey = particles[i];
@@ -1380,11 +1380,13 @@
           if (d < fd) fd = d;
         }
         let s = fd - 0.45 * pd;
-        const iso = p.type === 'PAPER' ? 6.5 : 5.5;
+        const iso = p.type === 'PAPER' ? 8 : 5.5;
         if (fd < sz * iso) s -= (p.type === 'PAPER' ? 100 : 80);
-        if (s > bestS) { bestS = s; best = prey; }
+        if (s > bestS) { bestS = s; best = prey; bestFd = fd; }
       }
-      return best ? { obj: best, d: Math.hypot(p.x - best.x, p.y - best.y) } : null;
+      if (!best) return null;
+      if (p.type === 'PAPER' && bestFd < sz * 8) return null;
+      return { obj: best, d: Math.hypot(p.x - best.x, p.y - best.y) };
     }
     function com(type) {
       let sx = 0, sy = 0, n = 0;
@@ -1434,9 +1436,13 @@
       p.state = state;
       const preyT = PREY[p.type], fearT = FEAR[p.type];
       const fear = nearest(p, fearT);
-      const prey = ((p.type === 'PAPER' || p.type === 'ROCK') && fearN > 0)
-        ? (safestPrey(p, preyT, fearT) || nearest(p, preyT))
-        : nearest(p, preyT);
+      let prey;
+      if ((p.type === 'PAPER' || p.type === 'ROCK') && fearN > 0) {
+        prey = safestPrey(p, preyT, fearT);
+        if (!prey && p.type !== 'PAPER') prey = nearest(p, preyT);
+      } else {
+        prey = nearest(p, preyT);
+      }
       if (fear && fearN > 0) {
         const near = 5 * p.size, far = 30 * p.size;
         let df = fear.d < near ? 1 : Math.max(0, 1 - (fear.d - near) / Math.max(1, far - near));

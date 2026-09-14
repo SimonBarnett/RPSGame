@@ -936,7 +936,7 @@ def nearest(p, type_name, particles):
 
 def safest_prey(p, preys, fears):
     """Prey with the most space from fear — do not dive the scrum."""
-    best, best_s = None, -1e18
+    best, best_s, best_fd = None, -1e18, 0.0
     sz = p.size
     for prey in preys or ():
         if prey is p:
@@ -948,12 +948,14 @@ def safest_prey(p, preys, fears):
             if d < fd:
                 fd = d
         s = fd - 0.45 * pd
-        iso = 6.5 if _tname(p) == 'PAPER' else 5.5
+        iso = 8.0 if _tname(p) == 'PAPER' else 5.5
         if fd < sz * iso:
             s -= 100.0 if _tname(p) == 'PAPER' else 80.0
         if s > best_s:
-            best_s, best = s, prey
+            best_s, best, best_fd = s, prey, fd
     if best is None:
+        return None
+    if _tname(p) == 'PAPER' and best_fd < sz * 8.0:
         return None
     return {'obj': best, 'd': math.hypot(p.x - best.x, p.y - best.y)}
 
@@ -1266,7 +1268,9 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     ally_pool = (by_type or {}).get(tn) or pool
     fear = nearest(p, fear_t, fear_pool)
     if tn in ('PAPER', 'ROCK') and fear_n > 0:
-        prey = safest_prey(p, prey_pool, fear_pool) or nearest(p, prey_t, prey_pool)
+        prey = safest_prey(p, prey_pool, fear_pool)
+        if prey is None and tn != 'PAPER':
+            prey = nearest(p, prey_t, prey_pool)
     else:
         prey = nearest(p, prey_t, prey_pool)
     if fear and fear.get('obj') is not None and fear_n > 0:
