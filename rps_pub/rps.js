@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 84, gen: 1586, games: 13044, at: "2026-09-14 15:02Z", sha: "e2c5433" };
+  const BUILD = { n: 85, gen: 1599, games: 13071, at: "2026-09-14 15:15Z", sha: "38886bc" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1749,20 +1749,36 @@
         const closest = Math.hypot(vx - ux * along, vy - uy * along);
         return closest < p.size * 0.5;
       };
+      const intoScissors = function (h) {
+        if (dNear < p.size * 12 && Math.abs(angDiff(h, nearH)) < 1.0) return true;
+        if (dPack < p.size * 14 && Math.abs(angDiff(h, packH)) < 0.85) return true;
+        return false;
+      };
+      const notIntoScissors = function (h) {
+        if (!intoScissors(h)) return h;
+        if (prey) {
+          const rh = headingTo(p.x, p.y, prey.x, prey.y);
+          if (!intoScissors(rh)) return rh;
+          const s = angDiff(packH, rh) >= 0 ? 1 : -1;
+          const wrap = angNorm(packH + s * (Math.PI * 0.5));
+          if (!intoScissors(wrap)) return wrap;
+        }
+        return angNorm(nearH + Math.PI);
+      };
       if (!prey) {
-        if (dNear < p.size * 6 || ram(want)) return angNorm(nearH + Math.PI);
-        return want;
+        if (dNear < p.size * 6 || ram(want)) return notIntoScissors(angNorm(nearH + Math.PI));
+        return notIntoScissors(want);
       }
       let hunt = chaseHeading(p, prey, 18);
       if (hunt == null) hunt = headingTo(p.x, p.y, prey.x, prey.y);
       const pd = Math.hypot(prey.x - p.x, prey.y - p.y);
       const beside = Math.abs(angDiff(hunt, packH)) > Math.PI * 0.5;
-      if (beside || !clips(hunt, pd) || dPack >= p.size * 4) return hunt;
+      if (beside || !clips(hunt, pd) || dPack >= p.size * 4) return notIntoScissors(hunt);
       const sign = angDiff(packH, hunt) >= 0 ? 1 : -1;
       const minOff = Math.max(0.60, Math.atan2(packR + p.size, Math.max(dPack, p.size)));
-      const around = angNorm(packH + sign * minOff);
-      if (!ram(around)) return around;
-      return angNorm(packH + sign * Math.max(minOff, 0.85));
+      let around = angNorm(packH + sign * minOff);
+      if (ram(around)) around = angNorm(packH + sign * Math.max(minOff, 0.85));
+      return notIntoScissors(around);
     }
 
     function avoidFearOverlap(p, want) {
