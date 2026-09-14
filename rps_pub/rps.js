@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 79, gen: 1419, games: 12660, at: "2026-09-14 12:33Z", sha: "ea353d9" };
+  const BUILD = { n: 80, gen: 1450, games: 12732, at: "2026-09-14 13:02Z", sha: "33d5047" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1757,7 +1757,7 @@
       if (hunt == null) hunt = headingTo(p.x, p.y, prey.x, prey.y);
       const pd = Math.hypot(prey.x - p.x, prey.y - p.y);
       const beside = Math.abs(angDiff(hunt, packH)) > Math.PI * 0.5;
-      if (beside || !clips(hunt, pd) || dPack >= p.size * 2.5) return hunt;
+      if (beside || !clips(hunt, pd)) return hunt;
       const sign = angDiff(packH, hunt) >= 0 ? 1 : -1;
       const minOff = Math.max(0.60, Math.atan2(packR + p.size, Math.max(dPack, p.size)));
       const around = angNorm(packH + sign * minOff);
