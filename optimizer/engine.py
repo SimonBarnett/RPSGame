@@ -2779,27 +2779,40 @@ class StrategyOptimizer:
     def _replicator_fitness(self, wins, n, wipe_risk, avg_dur):
         """Fitness f_i and population share x_i for replicator update.
 
-        Priorities (in order):
-          1. Win rate
-          2. Heavy penalty for killing last prey while predators still exist (auto-lose risk)
-          3. Prefer shorter endgames / decisive games (not ultra-spam short)
+        Win rate, wipe penalty, conversion volume. Duration is not a score.
         """
         types = ('ROCK', 'PAPER', 'SCISSORS')
         win_rate = {t: wins.get(t, 0) / max(1, n) for t in types}
-        # Wipe: last-meal convert while fear lives. Duration is the proxy for
-        # "nobody popped the last 2–3" — short windows mean someone did.
         wipe_pen = {}
         for t in types:
             wr = min(1.0, max(0.0, float(wipe_risk.get(t, 0) or 0)))
             wipe_pen[t] = min(0.45, 0.90 * wr)
 
         import math as _m
-        # FAST_SIM games are 1–8s of tick time; live games 20–50s.
-        ad = float(avg_dur or 0)
-        center, span, short = (6.0, 4.0, 2.5) if ad < 12.0 else (25.0, 16.0, 8.0)
-        dur_term = 0.32 * _m.tanh((ad - center) / span)
-        if ad < short:
-            dur_term -= 0.20
+        conv_term = {t: 0.0 for t in types}
+        try:
+            games = getattr(self, '_last_sample_games', None) or []
+            acc = {t: [] for t in types}
+            teams = []
+            for g in games:
+                try:
+                    teams.append(float(g.get('teamSize', 8) or 8))
+                except Exception:
+                    pass
+                for t in types:
+                    key = t.lower() + '_conversions'
+                    try:
+                        acc[t].append(float(g.get(key, 0) or 0))
+                    except Exception:
+                        pass
+            ts = (sum(teams) / len(teams)) if teams else 8.0
+            scale = max(6.0, ts)
+            for t in types:
+                if acc[t]:
+                    mean_c = sum(acc[t]) / len(acc[t])
+                    conv_term[t] = 0.40 * _m.tanh((mean_c - scale) / scale)
+        except Exception:
+            pass
 
         # Dual endgame objective:
         #   Predator/winner: LEAST endgame time (penalty for long CLEAR_HUNT)
@@ -2848,12 +2861,10 @@ class StrategyOptimizer:
         fitness = {}
         for t in types:
             wr = min(1.0, max(0.0, float(wipe_risk.get(t, 0) or 0)))
-            # Duration still counts; wipe only scales it down.
-            dur_t = dur_term * (1.0 - 0.65 * wr)
             fitness[t] = (
                 0.55 * win_rate[t]
                 - wipe_pen[t]
-                + dur_t
+                + conv_term[t]
                 - eg_pen[t]
                 + prey_survive_bonus[t]
             )
