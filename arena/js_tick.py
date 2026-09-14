@@ -1273,9 +1273,9 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             prey = nearest(p, prey_t, prey_pool)
     else:
         prey = nearest(p, prey_t, prey_pool)
-    # Delay feast: last 4 Rocks, or Scissors within 10×size.
+    # Delay feast: while any Scissors live, Paper does not close on Rock.
     _pfd = float(fear.get('d') or 1e9) if fear else 1e9
-    _pdelay = tn == 'PAPER' and fear_n > 0 and (prey_n <= 4 or _pfd < p.size * 10.0)
+    _pdelay = tn == 'PAPER' and fear_n > 0
     if _pdelay:
         prey = None
     if fear and fear.get('obj') is not None and fear_n > 0:

@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 102, gen: 1857, games: 14024, at: "2026-09-14 22:23Z", sha: "3351502" };
+  const BUILD = { n: 103, gen: 1878, games: 14065, at: "2026-09-14 22:57Z", sha: "1016d36" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1443,9 +1443,9 @@
       } else {
         prey = nearest(p, preyT);
       }
-      // Delay feast: last 4 Rocks, or Scissors within 10×size.
+      // Delay feast: while any Scissors live, Paper does not close on Rock.
       const pFd = fear ? fear.d : 1e9;
-      const pDelay = p.type === 'PAPER' && fearN > 0 && (preyN <= 4 || pFd < p.size * 10);
+      const pDelay = p.type === 'PAPER' && fearN > 0;
       if (pDelay) prey = null;
       if (fear && fearN > 0) {
         const near = 5 * p.size, far = 30 * p.size;
