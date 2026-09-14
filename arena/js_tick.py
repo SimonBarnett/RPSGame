@@ -1511,9 +1511,15 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     prey_obj = prey['obj'] if prey and prey.get('obj') is not None else None
     want = _avoid_fear_overlap(p, want, fear_pool)
     want = _paper_never_into_scissors(p, want, fear_pool, prey_obj)
-    # Paper, d < 8×size to nearest Scissors: never close; slide tangent / away.
+    # Paper, d < 8×size to nearest Scissors: never close — unless charging Rock.
     if tn == 'PAPER' and fear and fear.get('obj') is not None:
-        want = _no_close_on(p, want, fear['obj'], float(fear.get('d') or 1e9), 8.0)
+        charging = False
+        if prey_obj is not None and want is not None:
+            rh = heading_to(p.x, p.y, prey_obj.x, prey_obj.y)
+            if abs(ang_diff(want, rh)) < 0.50:
+                charging = True
+        if not charging:
+            want = _no_close_on(p, want, fear['obj'], float(fear.get('d') or 1e9), 8.0)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
