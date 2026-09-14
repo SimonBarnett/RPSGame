@@ -3441,6 +3441,10 @@ class StrategyOptimizer:
         n_chg = 0
         n_elig = 0
         n_dir0 = 0
+        gen = int(getattr(self, 'GENERATION', 0) or 0)
+        hist = [x for x in (getattr(self, '_playbook_nudge_hist', None) or [])
+                if gen - int(x[0]) < 8]
+        seen = {x[1] for x in hist}
         care_sids = set(self._CARE_SIDS)
         stall_states = {
             'LAST_PREY_RISK', 'LAST_MAN', 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE',
@@ -3525,6 +3529,9 @@ class StrategyOptimizer:
                     for path, bounds in tunables.items():
                         if n_this >= (2 if half else 4):
                             break
+                        key = '%s.%s.%s' % (tname, sid, path)
+                        if key in seen:
+                            continue
                         direction = self._playbook_dir(
                             path, fi, blunderous, stall, care=is_care,
                             card_score=scores.get(sid, 0.0))
@@ -3537,6 +3544,8 @@ class StrategyOptimizer:
                         n_chg += 1
                         n_this += 1
                         wrote_any = True
+                        seen.add(key)
+                        hist.append((gen, key))
                         cur = playbook._get_path(moved, path)
                         self.last_changes.append(
                             '%s.%s.%s -> %s  (f%+.2f dec%+.2f d%+d)' % (
@@ -3547,6 +3556,7 @@ class StrategyOptimizer:
             _nudge_pool(combat[:3])
             _nudge_pool(stall_pool[:2])
             _nudge_pool(care[:1])
+        self._playbook_nudge_hist = hist
         written = playbook.save_all_overlays()
         self._log_raw(
             'playbook strategy pass changes=%d wrote=%d eligible=%d dir0=%d strategies=%d skip=%d' % (
