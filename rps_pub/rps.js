@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 88, gen: 1614, games: 13236, at: "2026-09-14 16:35Z", sha: "aedd1fa" };
+  const BUILD = { n: 89, gen: 1621, games: 13308, at: "2026-09-14 17:05Z", sha: "faa995c" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1741,13 +1741,16 @@
         if (dNear < p.size * 5 && Math.abs(angDiff(h, nearH)) < 0.50) return true;
         return false;
       };
-      const clips = function (h, reach) {
+      const clipsXY = function (h, ox, oy, reach, rad) {
         const ux = Math.sin(h), uy = -Math.cos(h);
-        const vx = cx - p.x, vy = cy - p.y;
+        const vx = ox - p.x, vy = oy - p.y;
         const along = vx * ux + vy * uy;
         if (along <= 0 || along > reach) return false;
         const closest = Math.hypot(vx - ux * along, vy - uy * along);
-        return closest < p.size * 0.5;
+        return closest < rad;
+      };
+      const clips = function (h, reach) {
+        return clipsXY(h, cx, cy, reach, p.size * 0.5);
       };
       const intoScissors = function (h) {
         if (dNear < p.size * 10 && Math.abs(angDiff(h, nearH)) < 0.70) return true;
@@ -1758,10 +1761,6 @@
         if (!intoScissors(h)) return h;
         if (prey) {
           const rh = headingTo(p.x, p.y, prey.x, prey.y);
-          const pdR = Math.hypot(prey.x - p.x, prey.y - p.y);
-          const packOff = Math.abs(angDiff(rh, packH)) > Math.PI * 0.5
-            || !clips(rh, pdR) || dPack >= p.size * 4;
-          if (packOff) return Math.abs(angDiff(h, rh)) < 0.50 ? h : rh;
           if (!intoScissors(rh)) return rh;
           const s = angDiff(packH, rh) >= 0 ? 1 : -1;
           const wrap = angNorm(packH + s * (Math.PI * 0.5));
@@ -1779,7 +1778,8 @@
       if (hunt == null) hunt = headingTo(p.x, p.y, prey.x, prey.y);
       const pd = Math.hypot(prey.x - p.x, prey.y - p.y);
       const beside = Math.abs(angDiff(hunt, packH)) > Math.PI * 0.5;
-      if (beside || !clips(hunt, pd) || dPack >= p.size * 4) return hunt;
+      const onLine = clips(hunt, pd) || clipsXY(hunt, best.x, best.y, pd, p.size);
+      if (beside || !onLine || dPack >= p.size * 4) return notIntoScissors(hunt);
       const sign = angDiff(packH, hunt) >= 0 ? 1 : -1;
       const minOff = Math.max(0.60, Math.atan2(packR + p.size, Math.max(dPack, p.size)));
       let around = angNorm(packH + sign * minOff);
