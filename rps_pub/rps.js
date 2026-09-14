@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 92, gen: 1654, games: 13564, at: "2026-09-14 18:29Z", sha: "46291f9" };
+  const BUILD = { n: 93, gen: 1687, games: 13631, at: "2026-09-14 18:59Z", sha: "f5a71c1" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1650,6 +1650,10 @@
 
       want = avoidFearOverlap(p, want);
       want = paperNeverIntoScissors(p, want, prey && prey.obj);
+      // Paper, d < 8×size to nearest Scissors: never close; slide tangent / away.
+      if (p.type === 'PAPER' && fear && fear.obj) {
+        want = noCloseOn(p, want, fear.obj, fear.d, 8);
+      }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
         p.angle = angNorm(p.angle + Math.max(-maxTurn, Math.min(maxTurn, dlt)));
@@ -1792,6 +1796,24 @@
       let around = angNorm(packH + sign * minOff);
       if (ram(around)) around = angNorm(packH + sign * Math.max(minOff, 0.85));
       return notIntoScissors(around);
+    }
+
+    function noCloseOn(p, want, target, dist, limMult) {
+      if (want == null || !target) return want;
+      if (dist >= p.size * (limMult || 8)) return want;
+      const th = headingTo(p.x, p.y, target.x, target.y);
+      const fx = Math.sin(th), fy = -Math.cos(th);
+      let wx = Math.sin(want), wy = -Math.cos(want);
+      const close = wx * fx + wy * fy;
+      if (close <= 0) return want;
+      wx -= close * fx;
+      wy -= close * fy;
+      const n = Math.hypot(wx, wy);
+      if (n < 1e-6) {
+        const s = (p.id % 2) ? 1 : -1;
+        return angNorm(th + s * (Math.PI * 0.5));
+      }
+      return Math.atan2(wx, -wy);
     }
 
     function avoidFearOverlap(p, want) {

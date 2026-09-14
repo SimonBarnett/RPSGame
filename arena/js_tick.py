@@ -691,6 +691,27 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     return _not_into_scissors(around)
 
 
+def _no_close_on(p, want, target, dist, lim_mult=8.0):
+    """Zero the closing component toward target. Slide tangent, never toward."""
+    if want is None or target is None:
+        return want
+    if dist >= p.size * lim_mult:
+        return want
+    th = heading_to(p.x, p.y, target.x, target.y)
+    fx, fy = math.sin(th), -math.cos(th)
+    wx, wy = math.sin(want), -math.cos(want)
+    close = wx * fx + wy * fy
+    if close <= 0.0:
+        return want
+    wx -= close * fx
+    wy -= close * fy
+    n = math.hypot(wx, wy)
+    if n < 1e-6:
+        sign = 1.0 if (_pid(p) % 2) else -1.0
+        return ang_norm(th + sign * (math.pi * 0.5))
+    return math.atan2(wx, -wy)
+
+
 def _avoid_fear_overlap(p, want, fear_pool):
     """Do not steer into next-step overlap with a predator. Strike still converts."""
     if want is None or not fear_pool:
@@ -1490,6 +1511,9 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     prey_obj = prey['obj'] if prey and prey.get('obj') is not None else None
     want = _avoid_fear_overlap(p, want, fear_pool)
     want = _paper_never_into_scissors(p, want, fear_pool, prey_obj)
+    # Paper, d < 8×size to nearest Scissors: never close; slide tangent / away.
+    if tn == 'PAPER' and fear and fear.get('obj') is not None:
+        want = _no_close_on(p, want, fear['obj'], float(fear.get('d') or 1e9), 8.0)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
