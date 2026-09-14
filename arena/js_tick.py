@@ -621,19 +621,30 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
             return True
         return False
 
+    def _clips(h, reach):
+        ux, uy = math.sin(h), -math.cos(h)
+        vx, vy = cx - p.x, cy - p.y
+        along = vx * ux + vy * uy
+        if along <= 0.0 or along > reach:
+            return False
+        closest = math.hypot(vx - ux * along, vy - uy * along)
+        return closest < pack_r + p.size * 3.0
+
     if prey is None:
         if d_near < p.size * 6.0 or _ram(want):
             return ang_norm(near_h + math.pi)
         return want
     hunt = heading_to(p.x, p.y, prey.x, prey.y)
-    if not _ram(hunt):
+    pd = math.hypot(prey.x - p.x, prey.y - p.y)
+    if not _ram(hunt) and not _clips(hunt, pd):
         return hunt
     fx, fy = prey.x - cx, prey.y - cy
     fl = math.hypot(fx, fy) or 1.0
     gx = prey.x + fx / fl * (pack_r + p.size * 8.0)
     gy = prey.y + fy / fl * (pack_r + p.size * 8.0)
     to_goal = heading_to(p.x, p.y, gx, gy)
-    if not _ram(to_goal):
+    gd = math.hypot(gx - p.x, gy - p.y)
+    if not _ram(to_goal) and not _clips(to_goal, gd):
         return to_goal
     px, py = -(cy - p.y), cx - p.x
     if px * (gx - p.x) + py * (gy - p.y) < 0:
