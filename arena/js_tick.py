@@ -646,7 +646,7 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     # Pack is on the line: wrap around the hull toward Rock, not through.
     # +0.25 pad so a shallow wrap does not graze the pack edge.
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
-    min_off = math.atan2(pack_r + p.size * 6.0, max(d_pack, p.size)) + 0.25
+    min_off = math.atan2(pack_r + p.size * 3.0, max(d_pack, p.size)) + 0.25
     if min_off < 0.75:
         min_off = 0.75
     around = ang_norm(pack_h + sign * min_off)
