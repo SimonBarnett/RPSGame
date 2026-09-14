@@ -643,10 +643,12 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
     if beside or not _clips(hunt, pd) or d_pack >= p.size * 8.0:
         return hunt
-    # Pack is on the line: wrap around the hull toward Rock, not a 90° orbit
-    # and not through the pack. 0.70 is just outside the ram cone (0.55).
+    # Pack is on the line: wrap around the hull toward Rock, not through.
+    # +0.25 pad so a shallow wrap does not graze the pack edge.
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
-    min_off = max(0.70, math.atan2(pack_r + p.size * 6.0, max(d_pack, p.size)))
+    min_off = math.atan2(pack_r + p.size * 6.0, max(d_pack, p.size)) + 0.25
+    if min_off < 0.75:
+        min_off = 0.75
     around = ang_norm(pack_h + sign * min_off)
     if not _ram(around):
         return around
