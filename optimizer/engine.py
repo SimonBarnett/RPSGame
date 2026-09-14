@@ -3526,30 +3526,39 @@ class StrategyOptimizer:
                     strength = (0.18 if half else 0.30) + 0.55 * abs(fi)
                     n_this = 0
                     wrote_any = False
-                    for path, bounds in tunables.items():
-                        if n_this >= (2 if half else 4):
-                            break
-                        key = '%s.%s.%s' % (tname, sid, path)
-                        if key in seen:
-                            continue
-                        direction = self._playbook_dir(
-                            path, fi, blunderous, stall, care=is_care,
-                            card_score=scores.get(sid, 0.0))
-                        if direction == 0:
-                            continue
-                        moved = playbook.nudge_tunable(
-                            tname, sid, path, direction, strength=strength, bounds=bounds)
-                        if moved is None:
-                            continue
-                        n_chg += 1
-                        n_this += 1
-                        wrote_any = True
-                        seen.add(key)
-                        hist.append((gen, key))
-                        cur = playbook._get_path(moved, path)
-                        self.last_changes.append(
-                            '%s.%s.%s -> %s  (f%+.2f dec%+.2f d%+d)' % (
-                                tname, sid, path, cur, fi, dec, direction))
+                    cap = 2 if half else 4
+
+                    def _try_paths(allow_seen):
+                        nonlocal n_this, wrote_any, n_chg
+                        for path, bounds in tunables.items():
+                            if n_this >= cap:
+                                return
+                            key = '%s.%s.%s' % (tname, sid, path)
+                            if (not allow_seen) and key in seen:
+                                continue
+                            direction = self._playbook_dir(
+                                path, fi, blunderous, stall, care=is_care,
+                                card_score=scores.get(sid, 0.0))
+                            if direction == 0:
+                                continue
+                            moved = playbook.nudge_tunable(
+                                tname, sid, path, direction, strength=strength,
+                                bounds=bounds)
+                            if moved is None:
+                                continue
+                            n_chg += 1
+                            n_this += 1
+                            wrote_any = True
+                            seen.add(key)
+                            hist.append((gen, key))
+                            cur = playbook._get_path(moved, path)
+                            self.last_changes.append(
+                                '%s.%s.%s -> %s  (f%+.2f dec%+.2f d%+d)' % (
+                                    tname, sid, path, cur, fi, dec, direction))
+
+                    _try_paths(False)
+                    if not wrote_any:
+                        _try_paths(True)
                     if not wrote_any:
                         n_dir0 += 1
 
