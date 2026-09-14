@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 81, gen: 1484, games: 12816, at: "2026-09-14 13:33Z", sha: "b4de2b2" };
+  const BUILD = { n: 82, gen: 1538, games: 12932, at: "2026-09-14 14:02Z", sha: "96b1a3b" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1762,9 +1762,7 @@
       const minOff = Math.max(0.60, Math.atan2(packR + p.size, Math.max(dPack, p.size)));
       const around = angNorm(packH + sign * minOff);
       if (!ram(around)) return around;
-      const tangent = angNorm(packH + sign * Math.PI * 0.5);
-      if (!ram(tangent)) return tangent;
-      return around;
+      return angNorm(packH + sign * Math.max(minOff, 0.85));
     }
 
     function avoidFearOverlap(p, want) {

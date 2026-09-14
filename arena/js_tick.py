@@ -651,10 +651,7 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     around = ang_norm(pack_h + sign * min_off)
     if not _ram(around):
         return around
-    tangent = ang_norm(pack_h + sign * math.pi * 0.5)
-    if not _ram(tangent):
-        return tangent
-    return around
+    return ang_norm(pack_h + sign * max(min_off, 0.85))
 
 
 def _avoid_fear_overlap(p, want, fear_pool):
