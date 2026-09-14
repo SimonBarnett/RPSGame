@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 97, gen: 1771, games: 13835, at: "2026-09-14 19:54Z", sha: "5294c37" };
+  const BUILD = { n: 98, gen: 1787, games: 13876, at: "2026-09-14 20:18Z", sha: "5dab351" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1443,6 +1443,8 @@
       } else {
         prey = nearest(p, preyT);
       }
+      // Delay feast: while 2+ Scissors live, Paper does not close on Rock.
+      if (p.type === 'PAPER' && fearN >= 2) prey = null;
       if (fear && fearN > 0) {
         const near = 5 * p.size, far = 30 * p.size;
         let df = fear.d < near ? 1 : Math.max(0, 1 - (fear.d - near) / Math.max(1, far - near));
