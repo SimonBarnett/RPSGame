@@ -641,7 +641,7 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     # Charge Rock when the pack is not on the line. A far blob on the
     # bearing does not count as on the line.
     beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
-    if beside or not _clips(hunt, pd) or d_pack >= p.size * 5.0:
+    if beside or not _clips(hunt, pd) or d_pack >= p.size * 4.0:
         return hunt
     # Pack is on the line: shallow hull tangent toward Rock, not a 90° orbit.
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
