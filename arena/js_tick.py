@@ -639,33 +639,18 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
     if not _ram(hunt) and (beside or not _clips(hunt, pd)):
         return hunt
-    fx, fy = prey.x - cx, prey.y - cy
-    fl = math.hypot(fx, fy) or 1.0
-    gx = prey.x + fx / fl * (pack_r + p.size * 8.0)
-    gy = prey.y + fy / fl * (pack_r + p.size * 8.0)
-    to_goal = heading_to(p.x, p.y, gx, gy)
-    gd = math.hypot(gx - p.x, gy - p.y)
-    if not _ram(to_goal) and (abs(ang_diff(to_goal, pack_h)) > math.pi * 0.5 or not _clips(to_goal, gd)):
-        return to_goal
-    px, py = -(cy - p.y), cx - p.x
-    if px * (gx - p.x) + py * (gy - p.y) < 0:
-        px, py = -px, -py
-    pl = math.hypot(px, py) or 1.0
-    along = pack_r + p.size * 8.0
-    clear = pack_r + p.size * 10.0
-    wrap = heading_to(
-        p.x, p.y,
-        cx + px / pl * clear + fx / fl * along,
-        cy + py / pl * clear + fy / fl * along)
-    if not _ram(wrap):
-        return wrap
+    # Pack is in front of Rock: tangent around. Do not cut the corner through the hull.
+    sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
+    tangent = ang_norm(pack_h + sign * math.pi * 0.5)
+    if not _ram(tangent):
+        return tangent
     min_off = max(1.15, math.atan2(pack_r + p.size * 6.0, max(d_pack, p.size)))
     left = ang_norm(pack_h + min_off)
     right = ang_norm(pack_h - min_off)
-    h = left if abs(ang_diff(left, to_goal)) <= abs(ang_diff(right, to_goal)) else right
+    h = left if abs(ang_diff(left, hunt)) <= abs(ang_diff(right, hunt)) else right
     if not _ram(h):
         return h
-    return wrap
+    return tangent
 
 
 def _avoid_fear_overlap(p, want, fear_pool):

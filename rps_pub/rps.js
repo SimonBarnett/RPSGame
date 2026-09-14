@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 58, gen: 701, games: 10993, at: "2026-09-14 01:33Z", sha: "fcc1264" };
+  const BUILD = { n: 59, gen: 729, games: 11063, at: "2026-09-14 02:03Z", sha: "442ebc8" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1756,30 +1756,15 @@
       const pd = Math.hypot(prey.x - p.x, prey.y - p.y);
       const beside = Math.abs(angDiff(hunt, packH)) > Math.PI * 0.5;
       if (!ram(hunt) && (beside || !clips(hunt, pd))) return hunt;
-      const fx = prey.x - cx, fy = prey.y - cy;
-      const fl = Math.hypot(fx, fy) || 1;
-      const gx = prey.x + fx / fl * (packR + p.size * 8);
-      const gy = prey.y + fy / fl * (packR + p.size * 8);
-      const toGoal = headingTo(p.x, p.y, gx, gy);
-      const gd = Math.hypot(gx - p.x, gy - p.y);
-      if (!ram(toGoal) && (Math.abs(angDiff(toGoal, packH)) > Math.PI * 0.5 || !clips(toGoal, gd))) return toGoal;
-      let px = -(cy - p.y), py = cx - p.x;
-      if (px * (gx - p.x) + py * (gy - p.y) < 0) { px = -px; py = -py; }
-      const pl = Math.hypot(px, py) || 1;
-      const along = packR + p.size * 8;
-      const clear = packR + p.size * 10;
-      const wrap = headingTo(
-        p.x, p.y,
-        cx + px / pl * clear + fx / fl * along,
-        cy + py / pl * clear + fy / fl * along
-      );
-      if (!ram(wrap)) return wrap;
+      const sign = angDiff(packH, hunt) >= 0 ? 1 : -1;
+      const tangent = angNorm(packH + sign * Math.PI * 0.5);
+      if (!ram(tangent)) return tangent;
       const minOff = Math.max(1.15, Math.atan2(packR + p.size * 6, Math.max(dPack, p.size)));
       const left = angNorm(packH + minOff);
       const right = angNorm(packH - minOff);
-      const h = Math.abs(angDiff(left, toGoal)) <= Math.abs(angDiff(right, toGoal)) ? left : right;
+      const h = Math.abs(angDiff(left, hunt)) <= Math.abs(angDiff(right, hunt)) ? left : right;
       if (!ram(h)) return h;
-      return wrap;
+      return tangent;
     }
 
     function avoidFearOverlap(p, want) {
