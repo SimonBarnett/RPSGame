@@ -638,10 +638,10 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     if hunt is None:
         hunt = heading_to(p.x, p.y, prey.x, prey.y)
     pd = math.hypot(prey.x - p.x, prey.y - p.y)
-    # Charge Rock when the pack is not on the line. Only a close blob on
+    # Charge Rock when the pack is not on the line. Only a nearer blob on
     # the bearing counts as on the line.
     beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
-    if beside or not _clips(hunt, pd) or d_pack >= p.size * 4.0:
+    if beside or not _clips(hunt, pd) or d_pack >= p.size * 2.5:
         return hunt
     # Pack is on the line: wrap around the hull toward Rock, not through.
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
