@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 94, gen: 1711, games: 13679, at: "2026-09-14 19:14Z", sha: "0cbd9dc" };
+  const BUILD = { n: 95, gen: 1731, games: 13723, at: "2026-09-14 19:26Z", sha: "021d5d2" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1650,14 +1650,16 @@
 
       want = avoidFearOverlap(p, want);
       want = paperNeverIntoScissors(p, want, prey && prey.obj);
-      // Paper, d < 8×size to nearest Scissors: never close — unless charging Rock.
+      // Paper, d < 8×size to nearest Scissors: never close, unless Rock is closer.
       if (p.type === 'PAPER' && fear && fear.obj) {
-        let charging = false;
+        const fd = fear.d;
+        let pd = 1e9, charging = false;
         if (prey && prey.obj && want != null) {
+          pd = Math.hypot(p.x - prey.obj.x, p.y - prey.obj.y);
           const rh = headingTo(p.x, p.y, prey.obj.x, prey.obj.y);
           if (Math.abs(angDiff(want, rh)) < 0.50) charging = true;
         }
-        if (!charging) want = noCloseOn(p, want, fear.obj, fear.d, 8);
+        if (!(charging && fd >= pd)) want = noCloseOn(p, want, fear.obj, fd, 8);
       }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
