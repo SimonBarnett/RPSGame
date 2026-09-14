@@ -1419,7 +1419,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         roles_assign(list(allies))
     hide_h = hide_among_prey(p, preys, fear['obj'] if fear else None)
     if hide_h and state in ('OUTNUMBERED', 'NO_PREY_FEAR_ALIVE'):
-        want = blend_headings(want, hide_h, 0.35)
+        if not (tn == 'PAPER' and fear_n >= 2):
+            want = blend_headings(want, hide_h, 0.35)
     corner_h = anti_corner_herd(p, prey['obj'] if prey else None, W, H)
     if corner_h and fear_n > 0 and mode == 'chase':
         want = blend_headings(want, corner_h, 0.4)
@@ -1529,6 +1530,14 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             if abs(ang_diff(want, rh)) < 0.50:
                 charging = True
         want = _no_close_on(p, want, fear['obj'], fd, 4.0 if charging else 8.0)
+    # Delay-feast stick: evade Scissors, do not bump-convert Rock.
+    if tn == 'PAPER' and fear_n >= 2:
+        want = safe_h
+        rock = nearest(p, prey_t, prey_pool)
+        if rock and rock.get('obj') is not None:
+            want = _no_close_on(p, want, rock['obj'], float(rock.get('d') or 1e9), 5.0)
+        if fear and fear.get('obj') is not None:
+            want = _no_close_on(p, want, fear['obj'], float(fear.get('d') or 1e9), 8.0)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))

@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 98, gen: 1787, games: 13876, at: "2026-09-14 20:18Z", sha: "5dab351" };
+  const BUILD = { n: 99, gen: 1798, games: 13898, at: "2026-09-14 20:37Z", sha: "1bec9bd" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1568,7 +1568,8 @@
       if (!p._role) rolesAssign(allies);
 
       const hideH = hideAmongPrey(p, preys, fear && fear.obj);
-      if (hideH && (state === 'OUTNUMBERED' || state === 'NO_PREY_FEAR_ALIVE')) want = blendHeadings(want, hideH, 0.35);
+      if (hideH && (state === 'OUTNUMBERED' || state === 'NO_PREY_FEAR_ALIVE')
+          && !(p.type === 'PAPER' && fearN >= 2)) want = blendHeadings(want, hideH, 0.35);
       const cornerH = antiCornerHerd(p, prey && prey.obj, W, H);
       if (cornerH && fearN > 0 && mode === 'chase') want = blendHeadings(want, cornerH, 0.4);
       const cov = coverHeading(p, fear && fear.obj, forts);
@@ -1667,6 +1668,13 @@
           if (Math.abs(angDiff(want, rh)) < 0.50) charging = true;
         }
         want = noCloseOn(p, want, fear.obj, fd, charging ? 4 : 8);
+      }
+      // Delay-feast stick: evade Scissors, do not bump-convert Rock.
+      if (p.type === 'PAPER' && fearN >= 2) {
+        want = safeH;
+        const rock = nearest(p, preyT);
+        if (rock && rock.obj) want = noCloseOn(p, want, rock.obj, rock.d, 5);
+        if (fear && fear.obj) want = noCloseOn(p, want, fear.obj, fear.d, 8);
       }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
