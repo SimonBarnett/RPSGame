@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 90, gen: 1627, games: 13408, at: "2026-09-14 17:33Z", sha: "e164e55" };
+  const BUILD = { n: 91, gen: 1635, games: 13500, at: "2026-09-14 18:03Z", sha: "7f3045a" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1784,7 +1784,7 @@
       const onLine = clips(hunt, pd) || clipsXY(hunt, best.x, best.y, pd, p.size);
       if (beside || !onLine || dPack >= p.size * 4) {
         const rh = headingTo(p.x, p.y, prey.x, prey.y);
-        if (Math.abs(angDiff(hunt, rh)) < 0.50) return hunt;
+        if (!intoScissors(hunt) || Math.abs(angDiff(hunt, rh)) < 0.50) return hunt;
         return notIntoScissors(hunt);
       }
       const sign = angDiff(packH, hunt) >= 0 ? 1 : -1;

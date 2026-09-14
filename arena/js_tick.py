@@ -677,7 +677,8 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     on_line = _clips(hunt, pd) or _clips_xy(hunt, best.x, best.y, pd, p.size)
     if beside or not on_line or d_pack >= p.size * 4.0:
         rh = heading_to(p.x, p.y, prey.x, prey.y)
-        if abs(ang_diff(hunt, rh)) < 0.50:
+        # Charge intercept/direct hunt unless it points at Scissors with no Rock on it.
+        if (not _into_scissors(hunt)) or abs(ang_diff(hunt, rh)) < 0.50:
             return hunt
         return _not_into_scissors(hunt)
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
