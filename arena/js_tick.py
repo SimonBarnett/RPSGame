@@ -630,52 +630,28 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
         closest = math.hypot(vx - ux * along, vy - uy * along)
         return closest < p.size * 0.5
 
-    def _into_scissors(h):
-        if d_near < p.size * 12.0 and abs(ang_diff(h, near_h)) < 1.0:
-            return True
-        if d_pack < p.size * 14.0 and abs(ang_diff(h, pack_h)) < 0.85:
-            return True
-        return False
-
-    def _rock_on_line(h):
-        if prey is None:
-            return False
-        rh = heading_to(p.x, p.y, prey.x, prey.y)
-        return abs(ang_diff(h, rh)) < 0.7
-
-    def _not_into_scissors(h):
-        """Never fly at Scissors unless Rock is on that same heading."""
-        if not _into_scissors(h):
-            return h
-        if prey is not None:
-            rh = heading_to(p.x, p.y, prey.x, prey.y)
-            if not _into_scissors(rh):
-                return rh
-            sign = 1.0 if ang_diff(pack_h, rh) >= 0.0 else -1.0
-            wrap = ang_norm(pack_h + sign * (math.pi * 0.5))
-            if not _into_scissors(wrap):
-                return wrap
-        return ang_norm(near_h + math.pi)
-
     if prey is None:
         if d_near < p.size * 6.0 or _ram(want):
-            return _not_into_scissors(ang_norm(near_h + math.pi))
-        return _not_into_scissors(want)
+            return ang_norm(near_h + math.pi)
+        return want
     hunt = chase_heading(p, prey, 18)
     if hunt is None:
         hunt = heading_to(p.x, p.y, prey.x, prey.y)
     pd = math.hypot(prey.x - p.x, prey.y - p.y)
+    # Charge Rock when the pack is not on the line. A far blob on the
+    # bearing does not count as on the line.
     beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
     if beside or not _clips(hunt, pd) or d_pack >= p.size * 4.0:
-        return _not_into_scissors(hunt)
+        return hunt
+    # Pack is on the line: shallow hull tangent toward Rock, not through.
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
     min_off = math.atan2(pack_r + p.size, max(d_pack, p.size))
     if min_off < 0.60:
         min_off = 0.60
     around = ang_norm(pack_h + sign * min_off)
-    if _ram(around):
-        around = ang_norm(pack_h + sign * max(min_off, 0.85))
-    return _not_into_scissors(around)
+    if not _ram(around):
+        return around
+    return ang_norm(pack_h + sign * max(min_off, 0.85))
 
 
 def _avoid_fear_overlap(p, want, fear_pool):
