@@ -628,7 +628,7 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
         if along <= 0.0 or along > reach:
             return False
         closest = math.hypot(vx - ux * along, vy - uy * along)
-        return closest < p.size * 1.0
+        return closest < p.size * 0.5
 
     if prey is None:
         if d_near < p.size * 6.0 or _ram(want):
