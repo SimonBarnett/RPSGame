@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 101, gen: 1837, games: 13981, at: "2026-09-14 21:46Z", sha: "1c9b760" };
+  const BUILD = { n: 102, gen: 1857, games: 14024, at: "2026-09-14 22:23Z", sha: "3351502" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1443,8 +1443,10 @@
       } else {
         prey = nearest(p, preyT);
       }
-      // Delay feast: while 2+ Scissors live, Paper does not close on Rock.
-      if (p.type === 'PAPER' && fearN > 0 && preyN <= 4) prey = null;
+      // Delay feast: last 4 Rocks, or Scissors within 10×size.
+      const pFd = fear ? fear.d : 1e9;
+      const pDelay = p.type === 'PAPER' && fearN > 0 && (preyN <= 4 || pFd < p.size * 10);
+      if (pDelay) prey = null;
       if (fear && fearN > 0) {
         const near = 5 * p.size, far = 30 * p.size;
         let df = fear.d < near ? 1 : Math.max(0, 1 - (fear.d - near) / Math.max(1, far - near));
@@ -1569,7 +1571,7 @@
 
       const hideH = hideAmongPrey(p, preys, fear && fear.obj);
       if (hideH && (state === 'OUTNUMBERED' || state === 'NO_PREY_FEAR_ALIVE')
-          && !(p.type === 'PAPER' && fearN > 0 && preyN <= 4)) want = blendHeadings(want, hideH, 0.35);
+          && !pDelay) want = blendHeadings(want, hideH, 0.35);
       const cornerH = antiCornerHerd(p, prey && prey.obj, W, H);
       if (cornerH && fearN > 0 && mode === 'chase') want = blendHeadings(want, cornerH, 0.4);
       const cov = coverHeading(p, fear && fear.obj, forts);
@@ -1670,7 +1672,7 @@
         want = noCloseOn(p, want, fear.obj, fd, charging ? 4 : 8);
       }
       // Delay-feast stick: evade Scissors, do not bump-convert Rock.
-      if (p.type === 'PAPER' && fearN > 0 && preyN <= 4) {
+      if (pDelay) {
         want = safeH;
         const rock = nearest(p, preyT);
         if (rock && rock.obj) want = noCloseOn(p, want, rock.obj, rock.d, 5);
