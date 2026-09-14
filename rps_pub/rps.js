@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 59, gen: 729, games: 11063, at: "2026-09-14 02:03Z", sha: "442ebc8" };
+  const BUILD = { n: 60, gen: 751, games: 11124, at: "2026-09-14 02:33Z", sha: "c143d2c" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1514,7 +1514,8 @@
       } else if (fear && fobj && fearN > 0 && state !== 'CLEAR_HUNT') {
         const fearAhead = Math.abs(angDiff(p.angle, headingTo(p.x, p.y, fobj.x, fobj.y))) < Math.PI / 2;
         const fearClose = fear.d < 8 * p.size || (fearAhead && fear.d < 12 * p.size);
-        if (fearClose) {
+        const paperHunt = p.type === 'PAPER' && prey;
+        if (fearClose && !paperHunt) {
           mode = 'evade';
           want = safeH;
           p._locked = null;

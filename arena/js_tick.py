@@ -1296,7 +1296,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     elif fear and fobj is not None and fear_n > 0 and state != 'CLEAR_HUNT':
         fear_ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fobj.x, fobj.y))) < math.pi / 2
         fear_close = fear['d'] < 8 * p.size or (fear_ahead and fear['d'] < 12 * p.size)
-        if fear_close:
+        paper_hunt = tn == 'PAPER' and prey
+        if fear_close and not paper_hunt:
             mode = 'evade'
             want = safe_h
             p._locked = None
