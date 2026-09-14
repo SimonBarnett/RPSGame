@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 95, gen: 1731, games: 13723, at: "2026-09-14 19:26Z", sha: "021d5d2" };
+  const BUILD = { n: 96, gen: 1751, games: 13783, at: "2026-09-14 19:38Z", sha: "61f36cf" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1650,16 +1650,15 @@
 
       want = avoidFearOverlap(p, want);
       want = paperNeverIntoScissors(p, want, prey && prey.obj);
-      // Paper, d < 8×size to nearest Scissors: never close, unless Rock is closer.
+      // Paper: 8× keep-out while kiting; last-meter (4×) even while charging.
       if (p.type === 'PAPER' && fear && fear.obj) {
         const fd = fear.d;
-        let pd = 1e9, charging = false;
+        let charging = false;
         if (prey && prey.obj && want != null) {
-          pd = Math.hypot(p.x - prey.obj.x, p.y - prey.obj.y);
           const rh = headingTo(p.x, p.y, prey.obj.x, prey.obj.y);
           if (Math.abs(angDiff(want, rh)) < 0.50) charging = true;
         }
-        if (!(charging && fd >= pd)) want = noCloseOn(p, want, fear.obj, fd, 8);
+        want = noCloseOn(p, want, fear.obj, fd, charging ? 4 : 8);
       }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
@@ -1747,6 +1746,7 @@
       const packH = headingTo(p.x, p.y, cx, cy);
       const dNear = Math.sqrt(bestD2);
       const dPack = Math.hypot(p.x - cx, p.y - cy);
+      if (dNear < p.size * 6) return angNorm(nearH + Math.PI);
       const ram = function (h) {
         if (dPack < p.size * 8 && Math.abs(angDiff(h, packH)) < 0.55) return true;
         if (dNear < p.size * 5 && Math.abs(angDiff(h, nearH)) < 0.50) return true;

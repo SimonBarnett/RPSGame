@@ -612,6 +612,8 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     pack_h = heading_to(p.x, p.y, cx, cy)
     d_near = math.sqrt(best_d2)
     d_pack = math.hypot(p.x - cx, p.y - cy)
+    if d_near < p.size * 6.0:
+        return ang_norm(near_h + math.pi)
 
     def _ram(h):
         # Direct-into-pack only. Wrap (~90°) stays legal; not a 60° per-Scissors cone.
@@ -1511,18 +1513,15 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     prey_obj = prey['obj'] if prey and prey.get('obj') is not None else None
     want = _avoid_fear_overlap(p, want, fear_pool)
     want = _paper_never_into_scissors(p, want, fear_pool, prey_obj)
-    # Paper, d < 8×size to nearest Scissors: never close, unless Rock is closer.
+    # Paper: 8× keep-out while kiting; last-meter (4×) even while charging.
     if tn == 'PAPER' and fear and fear.get('obj') is not None:
         fd = float(fear.get('d') or 1e9)
-        pd = 1e9
         charging = False
         if prey_obj is not None and want is not None:
-            pd = math.hypot(prey_obj.x - p.x, prey_obj.y - p.y)
             rh = heading_to(p.x, p.y, prey_obj.x, prey_obj.y)
             if abs(ang_diff(want, rh)) < 0.50:
                 charging = True
-        if not (charging and fd >= pd):
-            want = _no_close_on(p, want, fear['obj'], fd, 8.0)
+        want = _no_close_on(p, want, fear['obj'], fd, 4.0 if charging else 8.0)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
