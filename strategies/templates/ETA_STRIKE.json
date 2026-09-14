@@ -7,7 +7,7 @@
     "states": [
       "CONTESTED"
     ],
-    "priority": 62
+    "priority": 80
   },
   "tactics": [
     "prey_pull",

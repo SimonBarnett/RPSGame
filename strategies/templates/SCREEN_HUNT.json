@@ -8,7 +8,7 @@
       "CONTESTED",
       "OUTNUMBERED"
     ],
-    "priority": 58,
+    "priority": 80,
     "min_self": 3
   },
   "tactics": [
