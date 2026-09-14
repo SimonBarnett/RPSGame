@@ -32,7 +32,7 @@ _BANNED_FALLBACK = {
 
 _FORCE_FALLBACK = {
     'PAPER': {
-        'CONTESTED': ('FORT_KITE', 'OPEN_KITE', 'ORBIT_KITE', 'BOUNCE_JUKE', 'CROSS_LANE'),
+        'CONTESTED': ('FORT_KITE', 'OPEN_KITE', 'ORBIT_KITE', 'BOUNCE_JUKE', 'CROSS_LANE', 'ETA_STRIKE', 'SCREEN_HUNT'),
         'OUTNUMBERED': ('FORT_KITE', 'OPEN_KITE', 'ORBIT_KITE'),
         'NO_PREY_FEAR_ALIVE': ('FEAR_RIDGE', 'FORT_KITE', 'OPEN_KITE'),
         'NEAR_WIPE': ('ESCORT_RING', 'LAST_MAN_RUN', 'OPEN_KITE'),
@@ -111,7 +111,7 @@ def evict(type_name, sid, state='CONTESTED'):
     options = (FORCE.get(t) or {}).get(state) or (FORCE.get(t) or {}).get('CONTESTED') or ()
     share = recent_share(40)
     if t == 'PAPER' and state == 'CONTESTED' and share.get('PAPER', 0) < 0.28:
-        options = ('FORT_KITE', 'OPEN_KITE', 'ORBIT_KITE', 'BOUNCE_JUKE')
+        options = ('FORT_KITE', 'OPEN_KITE', 'ORBIT_KITE', 'BOUNCE_JUKE', 'ETA_STRIKE', 'SCREEN_HUNT')
     if t == 'SCISSORS' and state == 'CONTESTED' and share.get('SCISSORS', 0) > 0.38:
         options = ('BOUNCE_JUKE', 'FORT_KITE', 'SURVIVE_FEAR')
     if t == 'ROCK' and state == 'CONTESTED' and share.get('ROCK', 0) > 0.40:

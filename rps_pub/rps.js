@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 63, gen: 832, games: 11359, at: "2026-09-14 04:03Z", sha: "b7615b5" };
+  const BUILD = { n: 64, gen: 844, games: 11390, at: "2026-09-14 04:15Z", sha: "c5bfeff" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.

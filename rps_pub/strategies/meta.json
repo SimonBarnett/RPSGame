@@ -37,7 +37,9 @@
         "OPEN_KITE",
         "ORBIT_KITE",
         "BOUNCE_JUKE",
-        "CROSS_LANE"
+        "CROSS_LANE",
+        "ETA_STRIKE",
+        "SCREEN_HUNT"
       ],
       "OUTNUMBERED": [
         "FORT_KITE",
