@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 57, gen: 674, games: 10934, at: "2026-09-14 01:03Z", sha: "67d5b20" };
+  const BUILD = { n: 58, gen: 701, games: 10993, at: "2026-09-14 01:33Z", sha: "fcc1264" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1754,7 +1754,7 @@
       }
       const hunt = headingTo(p.x, p.y, prey.x, prey.y);
       const pd = Math.hypot(prey.x - p.x, prey.y - p.y);
-      const beside = Math.abs(angDiff(hunt, packH)) > 1.00;
+      const beside = Math.abs(angDiff(hunt, packH)) > Math.PI * 0.5;
       if (!ram(hunt) && (beside || !clips(hunt, pd))) return hunt;
       const fx = prey.x - cx, fy = prey.y - cy;
       const fl = Math.hypot(fx, fy) || 1;
@@ -1762,12 +1762,12 @@
       const gy = prey.y + fy / fl * (packR + p.size * 8);
       const toGoal = headingTo(p.x, p.y, gx, gy);
       const gd = Math.hypot(gx - p.x, gy - p.y);
-      if (!ram(toGoal) && (Math.abs(angDiff(toGoal, packH)) > 1.00 || !clips(toGoal, gd))) return toGoal;
+      if (!ram(toGoal) && (Math.abs(angDiff(toGoal, packH)) > Math.PI * 0.5 || !clips(toGoal, gd))) return toGoal;
       let px = -(cy - p.y), py = cx - p.x;
       if (px * (gx - p.x) + py * (gy - p.y) < 0) { px = -px; py = -py; }
       const pl = Math.hypot(px, py) || 1;
       const along = packR + p.size * 8;
-      const clear = packR + p.size * 5;
+      const clear = packR + p.size * 10;
       const wrap = headingTo(
         p.x, p.y,
         cx + px / pl * clear + fx / fl * along,
