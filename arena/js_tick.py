@@ -647,6 +647,11 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
             return h
         if prey is not None:
             rh = heading_to(p.x, p.y, prey.x, prey.y)
+            pd_r = math.hypot(prey.x - p.x, prey.y - p.y)
+            # Rock is on this heading and pack is not: charge.
+            if abs(ang_diff(h, rh)) < 0.50:
+                if not (_clips(h, pd_r) or _clips_xy(h, best.x, best.y, pd_r, p.size)):
+                    return h
             if not _into_scissors(rh):
                 return rh
             sign = 1.0 if ang_diff(pack_h, rh) >= 0.0 else -1.0
@@ -671,6 +676,9 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
     on_line = _clips(hunt, pd) or _clips_xy(hunt, best.x, best.y, pd, p.size)
     if beside or not on_line or d_pack >= p.size * 4.0:
+        rh = heading_to(p.x, p.y, prey.x, prey.y)
+        if abs(ang_diff(hunt, rh)) < 0.50:
+            return hunt
         return _not_into_scissors(hunt)
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
     min_off = math.atan2(pack_r + p.size, max(d_pack, p.size))
