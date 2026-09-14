@@ -1399,10 +1399,11 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         in_path = abs(ang_diff(want if want is not None else p.angle, fear_h)) < 0.9
         hard = p.size * (6.0 if tn in ('PAPER', 'ROCK') else 4.5)
         soft = p.size * (8.0 if tn in ('PAPER', 'ROCK') else 6.5)
-        if fd < hard:
+        paper_hunt = tn == 'PAPER' and prey and prey.get('obj') is not None
+        if fd < hard and not paper_hunt:
             want = flee
             mode = 'evade'
-        elif fd < soft and (fd < pd or in_path):
+        elif fd < soft and (fd < pd or in_path) and not paper_hunt:
             want = blend_headings(want, flee, 0.65)
         if state == 'LAST_MAN' and fd < p.size * 9:
             want = flee
@@ -1422,9 +1423,12 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     if want is not None:
         steered = _fear_clump_steer(p, world.particles, prey_t, want)
         if steered is not None:
-            want, close = steered
-            if close:
-                mode = 'evade'
+            sh, close = steered
+            paper_hunt = tn == 'PAPER' and prey and prey.get('obj') is not None
+            if not (close and paper_hunt):
+                want = sh
+                if close:
+                    mode = 'evade'
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])

@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 56, gen: 648, games: 10857, at: "2026-09-14 00:34Z", sha: "baf6c94" };
+  const BUILD = { n: 57, gen: 674, games: 10934, at: "2026-09-14 01:03Z", sha: "67d5b20" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1590,8 +1590,9 @@
         const inPath = Math.abs(angDiff(want != null ? want : p.angle, fearH)) < 0.9;
         const hard = p.size * ((p.type === 'PAPER' || p.type === 'ROCK') ? 6 : 4.5);
         const soft = p.size * ((p.type === 'PAPER' || p.type === 'ROCK') ? 8 : 6.5);
-        if (fd < hard) { want = flee; mode = 'evade'; }
-        else if (fd < soft && (fd < pd || inPath)) want = blendHeadings(want, flee, 0.65);
+        const paperHunt = p.type === 'PAPER' && prey && prey.obj;
+        if (fd < hard && !paperHunt) { want = flee; mode = 'evade'; }
+        else if (fd < soft && (fd < pd || inPath) && !paperHunt) want = blendHeadings(want, flee, 0.65);
         if (state === 'LAST_MAN' && fd < p.size * 9) { want = flee; mode = 'evade'; }
       }
       if (state === 'NEAR_WIPE' && fear && fear.obj && fear.d < p.size * 8) {
@@ -1603,7 +1604,10 @@
       }
       if (want != null) {
         const steered = fearClumpSteer(p, want);
-        if (steered) { want = steered.h; if (steered.close) mode = 'evade'; }
+        const paperHuntClump = p.type === 'PAPER' && prey && prey.obj;
+        if (steered && !(steered.close && paperHuntClump)) {
+          want = steered.h; if (steered.close) mode = 'evade';
+        }
       }
       const we2 = wallEscape(p);
       if (we2) want = blendHeadings(want, we2.h, we2.w);
