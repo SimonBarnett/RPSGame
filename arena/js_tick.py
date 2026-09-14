@@ -621,14 +621,23 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
             return True
         return False
 
-    def _clips(h, reach):
+    def _clips_any(h, reach):
         ux, uy = math.sin(h), -math.cos(h)
-        vx, vy = cx - p.x, cy - p.y
-        along = vx * ux + vy * uy
-        if along <= 0.0 or along > reach:
-            return False
-        closest = math.hypot(vx - ux * along, vy - uy * along)
-        return closest < pack_r + p.size
+        for q in fear_pool or ():
+            if q is p:
+                continue
+            vx, vy = q.x - p.x, q.y - p.y
+            d2 = vx * vx + vy * vy
+            if d2 > cap:
+                continue
+            along = vx * ux + vy * uy
+            if along <= 0.0 or along > reach:
+                continue
+            closest = math.hypot(vx - ux * along, vy - uy * along)
+            qs = getattr(q, 'size', None) or p.size
+            if closest < p.size + qs:
+                return True
+        return False
 
     if prey is None:
         if d_near < p.size * 6.0 or _ram(want):
@@ -636,8 +645,7 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
         return want
     hunt = heading_to(p.x, p.y, prey.x, prey.y)
     pd = math.hypot(prey.x - p.x, prey.y - p.y)
-    beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
-    if not _ram(hunt) and (beside or not _clips(hunt, pd)):
+    if not _ram(hunt) and not _clips_any(hunt, pd):
         return hunt
     # Pack is in front of Rock: tangent around. Do not cut the corner through the hull.
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0

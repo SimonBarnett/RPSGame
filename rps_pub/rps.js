@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 60, gen: 751, games: 11124, at: "2026-09-14 02:33Z", sha: "c143d2c" };
+  const BUILD = { n: 61, gen: 772, games: 11184, at: "2026-09-14 03:03Z", sha: "a7ef19e" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1741,13 +1741,20 @@
         if (dNear < p.size * 5 && Math.abs(angDiff(h, nearH)) < 0.50) return true;
         return false;
       };
-      const clips = function (h, reach) {
+      const clipsAny = function (h, reach) {
         const ux = Math.sin(h), uy = -Math.cos(h);
-        const vx = cx - p.x, vy = cy - p.y;
-        const along = vx * ux + vy * uy;
-        if (along <= 0 || along > reach) return false;
-        const closest = Math.hypot(vx - ux * along, vy - uy * along);
-        return closest < packR + p.size;
+        for (let i = 0; i < particles.length; i++) {
+          const q = particles[i];
+          if (q === p || q.type !== fearT) continue;
+          const vx = q.x - p.x, vy = q.y - p.y;
+          const d2 = vx * vx + vy * vy;
+          if (d2 > cap) continue;
+          const along = vx * ux + vy * uy;
+          if (along <= 0 || along > reach) continue;
+          const closest = Math.hypot(vx - ux * along, vy - uy * along);
+          if (closest < p.size + (q.size || p.size)) return true;
+        }
+        return false;
       };
       if (!prey) {
         if (dNear < p.size * 6 || ram(want)) return angNorm(nearH + Math.PI);
@@ -1755,8 +1762,7 @@
       }
       const hunt = headingTo(p.x, p.y, prey.x, prey.y);
       const pd = Math.hypot(prey.x - p.x, prey.y - p.y);
-      const beside = Math.abs(angDiff(hunt, packH)) > Math.PI * 0.5;
-      if (!ram(hunt) && (beside || !clips(hunt, pd))) return hunt;
+      if (!ram(hunt) && !clipsAny(hunt, pd)) return hunt;
       const sign = angDiff(packH, hunt) >= 0 ? 1 : -1;
       const tangent = angNorm(packH + sign * Math.PI * 0.5);
       if (!ram(tangent)) return tangent;
