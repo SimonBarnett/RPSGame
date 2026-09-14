@@ -628,13 +628,15 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
         if along <= 0.0 or along > reach:
             return False
         closest = math.hypot(vx - ux * along, vy - uy * along)
-        return closest < p.size * 5.0
+        return closest < p.size * 3.0
 
     if prey is None:
         if d_near < p.size * 6.0 or _ram(want):
             return ang_norm(near_h + math.pi)
         return want
-    hunt = heading_to(p.x, p.y, prey.x, prey.y)
+    hunt = chase_heading(p, prey, 18)
+    if hunt is None:
+        hunt = heading_to(p.x, p.y, prey.x, prey.y)
     pd = math.hypot(prey.x - p.x, prey.y - p.y)
     # Charge Rock when the pack is not on the line. Nearby off-axis Scissors
     # do not veto (ram stays for no-prey / wrap headings only).
