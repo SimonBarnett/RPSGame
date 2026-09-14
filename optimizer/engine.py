@@ -3819,13 +3819,18 @@ class StrategyOptimizer:
 
     @staticmethod
     def _change_key(line):
+        """Identity of a moved knob. Values and GP-EI payloads must not mint new keys."""
         s = str(line or '').strip()
         if not s:
             return ''
+        s = s.split('  (', 1)[0].strip()
+        if s.endswith(' match'):
+            s = s[:-6].strip()
+        if ' GP-EI ' in s:
+            return s.split(' GP-EI ', 1)[0].strip()
         if ' -> ' in s:
             s = s.split(' -> ', 1)[0]
-        s = s.split('  (', 1)[0].strip()
-        return s
+        return s.strip()
 
     def _commit_new_generation(self, written):
         """Tick GEN when enough distinct knobs have moved since the last generation."""

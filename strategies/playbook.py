@@ -1644,18 +1644,24 @@ def credit_decisions(match):
                 slot = dict(bys.get(stname) or {'n': 0, 'alpha': 1.0, 'beta': 1.0, 'ema': 0.0})
                 slot['n'] = int(slot.get('n') or 0) + cn
                 state_credit = (cn >= 1) if stname in SHORT_STATES else credited
+                frac = share * (cn / float(n)) if n else 0.0
+                state_pay = -0.02
                 if state_credit:
-                    frac = share * (cn / float(n))
                     if care:
                         if tname not in type_blunder:
                             slot['alpha'] = float(slot.get('alpha') or 1.0) + frac
+                            state_pay = 0.15 * frac + 0.28
                         else:
                             slot['beta'] = float(slot.get('beta') or 1.0) + frac
+                            state_pay = 0.15 * frac - 0.40
                     elif tname == winner:
                         slot['alpha'] = float(slot.get('alpha') or 1.0) + frac
+                        state_pay = frac
                     else:
                         slot['beta'] = float(slot.get('beta') or 1.0) + frac
-                slot['ema'] = 0.88 * float(slot.get('ema') or 0) + 0.12 * payoff
+                        state_pay = -0.25 * frac
+                # State ema is this slot only — never the match-wide payoff.
+                slot['ema'] = 0.88 * float(slot.get('ema') or 0) + 0.12 * state_pay
                 bys[stname] = slot
             st['by_state'] = bys
             by = dict(st.get('by_mode') or {})
@@ -1814,17 +1820,33 @@ def credit_decisions(match):
 
 
 def strategy_decision_score(type_name, strategy_id):
-    """Per-role payoff in roughly [-2, 2]. Blunders are a rate, not a count."""
+    """Per-role payoff in roughly [-2, 2]. Primary when-state only — never pooled."""
     ov = (TEAM_OVERLAYS.get(type_name) or {}).get(strategy_id) or {}
     st = ov.get('stats') or {}
+    bys = st.get('by_state') or {}
+    if not isinstance(bys, dict):
+        bys = {}
+    states_list = list(((ov.get('when') or {}).get('states') or []))
+    primary = str(states_list[0] or '').upper() if states_list else ''
+    slot = {}
+    if primary:
+        cand = bys.get(primary) or {}
+        if isinstance(cand, dict) and float(cand.get('n') or 0) >= 8:
+            slot = cand
+    src = slot if slot else st
     cf = float(st.get('conversions_for') or 0)
     ca = float(st.get('conversions_against') or 0)
     bl = float(st.get('last_prey_blunder') or 0)
     games = max(1.0, float(st.get('games') or 1))
     ticks = float(st.get('ticks') or 0)
-    wr = float(st.get('wins') or 0) / games
+    if slot:
+        a = float(src.get('alpha') or 1.0)
+        b = float(src.get('beta') or 1.0)
+        wr = a / max(1e-6, a + b)
+    else:
+        wr = float(st.get('wins') or 0) / games
     bl_rate = min(1.0, bl / games)
-    states = set(((ov.get('when') or {}).get('states') or []))
+    states = set(states_list)
     sid = str(strategy_id or '')
     stall = bool(states & {'LAST_PREY_RISK', 'LAST_MAN', 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE', 'OUTNUMBERED'})
     stall = stall or sid in (
@@ -1832,10 +1854,10 @@ def strategy_decision_score(type_name, strategy_id):
         'SURVIVE_FEAR', 'BOUNCE_JUKE', 'ESCORT_RING', 'LAST_PREY_CARE',
         'LAST_MEAL_ORBIT')
     hunt_clear = 'CLEAR_HUNT' in states or sid in ('CLEAR_SPLIT', 'CLEAR_FAN')
-    ema = st.get('ema')
-    ema_f = max(-1.0, min(1.0, float(ema) if ema is not None else 0.0))
+    ema_f = max(-1.0, min(1.0, float(src.get('ema') or 0.0)))
+    occ = float(src.get('n') or ticks)
     if stall:
-        alive = math.tanh(ticks / max(80.0, games * 80.0))
+        alive = math.tanh(occ / max(80.0, games * 80.0))
         score = 0.45 * ema_f + 0.25 * alive + 0.20 * wr - 1.6 * bl_rate
     elif hunt_clear:
         krate = math.tanh(8.0 * cf / max(20.0, ticks))
