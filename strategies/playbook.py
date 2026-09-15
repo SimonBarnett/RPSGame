@@ -166,8 +166,11 @@ def _write_json(path, data):
             except Exception:
                 pass
     except Exception:
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(payload)
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(payload)
+        except OSError:
+            pass
 
 
 def _merge(template, overlay):
@@ -304,11 +307,21 @@ def reload():
     TEAM_OVERLAYS = {t: {} for t in TYPES}
     for t in TYPES:
         tdir = os.path.join(TYPES_DIR, t)
-        os.makedirs(tdir, exist_ok=True)
+        try:
+            os.makedirs(tdir, exist_ok=True)
+        except OSError:
+            if not os.path.isdir(tdir):
+                raise
         for sid, spec in STRATEGIES.items():
             path = os.path.join(tdir, sid + '.json')
             ov = _read_json(path, None)
             created = not isinstance(ov, dict)
+            if created and os.path.isfile(path):
+                # NAS miss on a live file — do not seed-wipe learned knobs
+                ov = _read_json(path, None)
+                if not isinstance(ov, dict):
+                    continue
+                created = False
             if created:
                 ov = _seed_overlay(t, spec)
             else:
