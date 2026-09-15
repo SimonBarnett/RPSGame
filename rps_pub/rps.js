@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 118, gen: 1955, games: 14543, at: "2026-09-15 08:21Z", sha: "cf8080c" };
+  const BUILD = { n: 119, gen: 1955, games: 14545, at: "2026-09-15 08:22Z", sha: "e019d63" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1448,13 +1448,10 @@
       } else {
         prey = nearest(p, preyT);
       }
-      // Paper: no hunt while Scissors are close, or if Rock is not closer than Scissors.
-      if (p.type === 'PAPER' && fear) {
-        if (fear.d < p.size * 8) prey = null;
-        else if (prey && fear.d <= prey.d) prey = null;
-      }
+      // Paper: do not feast while any Scissors live (feeding Scissors is a fail).
+      if (p.type === 'PAPER' && fearN > 0) prey = null;
       const pFd = fear ? fear.d : 1e9;
-      const pDelay = p.type === 'PAPER' && fearN > 0 && !prey;
+      const pDelay = p.type === 'PAPER' && fearN > 0;
       if (fear && fearN > 0) {
         const near = 5 * p.size, far = 30 * p.size;
         let df = fear.d < near ? 1 : Math.max(0, 1 - (fear.d - near) / Math.max(1, far - near));

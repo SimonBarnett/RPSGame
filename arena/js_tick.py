@@ -1279,15 +1279,11 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             prey = nearest(p, prey_t, prey_pool)
     else:
         prey = nearest(p, prey_t, prey_pool)
-    # Paper: no hunt while Scissors are close, or if Rock is not closer than Scissors.
-    if tn == 'PAPER' and fear:
-        fd = float(fear.get('d') or 1e9)
-        if fd < p.size * 8.0:
-            prey = None
-        elif prey and fd <= float(prey.get('d') or 0):
-            prey = None
+    # Paper: do not feast while any Scissors live (feeding Scissors is a fail).
+    if tn == 'PAPER' and fear_n > 0:
+        prey = None
     _pfd = float(fear.get('d') or 1e9) if fear else 1e9
-    _pdelay = tn == 'PAPER' and fear_n > 0 and prey is None
+    _pdelay = tn == 'PAPER' and fear_n > 0
     if fear and fear.get('obj') is not None and fear_n > 0:
         fo = fear['obj']
         p._lastFear = {'x': fo.x, 'y': fo.y}
