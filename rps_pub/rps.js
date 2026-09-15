@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 132, gen: 1, games: 15586, at: "2026-09-15 18:55Z", sha: "5a48fc5" };
+  const BUILD = { n: 133, gen: 2013, games: 15628, at: "2026-09-15 20:04Z", sha: "c2a5ee4" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1387,7 +1387,7 @@
           if (d < fd) fd = d;
         }
         let s = fd - 0.45 * pd;
-        const iso = p.type === 'PAPER' ? 8 : (p.type === 'SCISSORS' ? 12 : 5.5);
+        const iso = p.type === 'PAPER' ? 8 : (p.type === 'SCISSORS' ? 14 : 5.5);
         if (fd < sz * iso) s -= (p.type === 'PAPER' ? 100 : 80);
         if (s > bestS) { bestS = s; best = prey; bestFd = fd; }
       }
@@ -1700,16 +1700,16 @@
       // Scissors: re-commit intercept on Paper. Last-prey abort / swarm must not dump chase.
       if (p.type === 'SCISSORS' && prey && prey.obj) {
         const sfd = fear ? fear.d : 1e9;
-        if (sfd >= p.size * 12) {
+        if (sfd >= p.size * 14) {
           want = huntHeading(p, prey.obj, look, fear && fear.d);
           mode = 'chase';
           p._locked = prey.obj;
         }
       }
-      // Scissors: kite Rocks inside 12× so converted Paper is not eaten next to Rocks.
-      if (p.type === 'SCISSORS' && fear && fear.obj && fear.d < p.size * 12) {
+      // Scissors: kite Rocks inside 14× so converted Paper is not eaten next to Rocks.
+      if (p.type === 'SCISSORS' && fear && fear.obj && fear.d < p.size * 14) {
         want = safeH;
-        want = noCloseOn(p, want, fear.obj, fear.d, 12);
+        want = noCloseOn(p, want, fear.obj, fear.d, 14);
       }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
