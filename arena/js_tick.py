@@ -948,7 +948,7 @@ def safest_prey(p, preys, fears):
             if d < fd:
                 fd = d
         s = fd - 0.45 * pd
-        iso = 8.0 if _tname(p) == 'PAPER' else 5.5
+        iso = 8.0 if _tname(p) in ('PAPER', 'SCISSORS') else 5.5
         if fd < sz * iso:
             s -= 100.0 if _tname(p) == 'PAPER' else 80.0
         if s > best_s:

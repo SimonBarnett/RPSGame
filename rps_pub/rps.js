@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 109, gen: 1931, games: 14309, at: "2026-09-15 04:52Z", sha: "4cf64f3" };
+  const BUILD = { n: 110, gen: 1934, games: 14344, at: "2026-09-15 05:33Z", sha: "708fb53" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1380,7 +1380,7 @@
           if (d < fd) fd = d;
         }
         let s = fd - 0.45 * pd;
-        const iso = p.type === 'PAPER' ? 8 : 5.5;
+        const iso = (p.type === 'PAPER' || p.type === 'SCISSORS') ? 8 : 5.5;
         if (fd < sz * iso) s -= (p.type === 'PAPER' ? 100 : 80);
         if (s > bestS) { bestS = s; best = prey; bestFd = fd; }
       }
