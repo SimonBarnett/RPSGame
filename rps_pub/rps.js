@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 128, gen: 2002, games: 14812, at: "2026-09-15 15:07Z", sha: "22c7fb1" };
+  const BUILD = { n: 129, gen: 2004, games: 14828, at: "2026-09-15 15:41Z", sha: "0011bbf" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1680,13 +1680,13 @@
       }
       // No isolated Rock: flee. Cornered Scissors: leave the pocket. No orbit.
       if (pDelay) {
-        // Blend with current heading so Scissors can intercept; no 180 kite, no orbit.
-        want = blendHeadings(p.angle, safeH, 0.30);
+        // Flee Scissors. Do not keep a closing heading (blend-with-current flew into them).
+        want = safeH;
         const fo = fear && fear.obj;
         if (fo && inCorner(fo, W, H)) {
           want = blendHeadings(headingTo(p.x, p.y, W * 0.5, H * 0.5), safeH, 0.55);
         }
-        if (fo) want = noCloseOn(p, want, fo, fear.d, 6);
+        if (fo) want = noCloseOn(p, want, fo, fear.d, 20);
         for (let ri = 0; ri < particles.length; ri++) {
           const rk = particles[ri];
           if (rk.type !== preyT) continue;
@@ -1733,11 +1733,15 @@
           const dx = b.x - a.x, dy = b.y - a.y;
           const dist = Math.hypot(dx, dy);
           const minD = a.size + b.size;
-          if (dist >= minD || dist < 1e-8) continue;
+          if (dist < 1e-8) continue;
+          const graze = dist < minD + Math.max(1.5, 0.20 * minD);
+          if (!graze) continue;
           const nx = dx / dist, ny = dy / dist;
-          const push = (minD - dist + SEPARATION_SLOP) * (a.type === b.type ? 1.15 : 0.55);
-          a.x -= nx * push; a.y -= ny * push;
-          b.x += nx * push; b.y += ny * push;
+          if (dist < minD) {
+            const push = (minD - dist + SEPARATION_SLOP) * (a.type === b.type ? 1.15 : 0.55);
+            a.x -= nx * push; a.y -= ny * push;
+            b.x += nx * push; b.y += ny * push;
+          }
           if (a.type === b.type) continue;
           const aEats = PREY[a.type] === b.type;
           const bEats = PREY[b.type] === a.type;
@@ -1745,7 +1749,6 @@
           applyPairImpulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION);
           if (!allowConvert) continue;
           const winnerP = aEats ? a : b;
-          if ((winnerP._eat_cd || 0) > 0) continue;
           const loser = aEats ? b : a;
           loser.type = winnerP.type;
           winnerP._eat_cd = eatCd;

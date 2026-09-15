@@ -1544,13 +1544,13 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         want = _no_close_on(p, want, fear['obj'], fd, 4.0 if charging else 8.0)
     # No isolated Rock: flee. Cornered Scissors: leave the pocket. No orbit.
     if _pdelay:
-        # Blend with current heading so Scissors can intercept; no 180 kite, no orbit.
-        want = blend_headings(getattr(p, 'angle', safe_h), safe_h, 0.30)
+        # Flee Scissors. Do not keep a closing heading (blend-with-current flew into them).
+        want = safe_h
         fo = fear['obj'] if fear and fear.get('obj') is not None else None
         if fo is not None and _in_corner(fo, W, H):
             want = blend_headings(heading_to(p.x, p.y, W * 0.5, H * 0.5), safe_h, 0.55)
         if fo is not None:
-            want = _no_close_on(p, want, fo, float(fear.get('d') or 1e9), 6.0)
+            want = _no_close_on(p, want, fo, float(fear.get('d') or 1e9), 20.0)
         for rk in prey_pool:
             rd = math.hypot(p.x - rk.x, p.y - rk.y)
             want = _no_close_on(p, want, rk, rd, 18.0)
@@ -1616,15 +1616,19 @@ def collide(world, allow_convert=True):
             dx, dy = b.x - a.x, b.y - a.y
             dist = math.hypot(dx, dy)
             min_d = a.size + b.size
-            if dist >= min_d or dist < 1e-8:
+            if dist < 1e-8:
+                continue
+            graze = dist < min_d + max(1.5, 0.20 * min_d)
+            if not graze:
                 continue
             nx, ny = dx / dist, dy / dist
             same = a.type == b.type
-            push = (min_d - dist + SEPARATION_SLOP) * (1.15 if same else 0.55)
-            a.x -= nx * push
-            a.y -= ny * push
-            b.x += nx * push
-            b.y += ny * push
+            if dist < min_d:
+                push = (min_d - dist + SEPARATION_SLOP) * (1.15 if same else 0.55)
+                a.x -= nx * push
+                a.y -= ny * push
+                b.x += nx * push
+                b.y += ny * push
             if same:
                 continue
             an, bn = _tname(a), _tname(b)
@@ -1636,9 +1640,7 @@ def collide(world, allow_convert=True):
             if not allow_convert:
                 continue
             winner_p = a if a_eats else b
-            if int(getattr(winner_p, '_eat_cd', 0) or 0) > 0:
-                continue
-            # Struck by a predator converts. Facing does not save the prey.
+            # Struck by a predator converts on contact. Facing / eat_cd do not skip.
             loser = b if a_eats else a
             lose_was = loser.type
             loser.type = winner_p.type
