@@ -1552,7 +1552,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             want = _no_close_on(p, want, fo, float(fear.get('d') or 1e9), 6.0)
         for rk in prey_pool:
             rd = math.hypot(p.x - rk.x, p.y - rk.y)
-            want = _no_close_on(p, want, rk, rd, 10.0)
+            want = _no_close_on(p, want, rk, rd, 12.0)
         want = _paper_never_into_scissors(p, want, fear_pool, None)
     # Scissors: kite Rocks inside 8× — do not dive Paper through a Rock pile.
     if tn == 'SCISSORS' and fear and fear.get('obj') is not None:

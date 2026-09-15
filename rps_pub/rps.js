@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 121, gen: 1973, games: 14622, at: "2026-09-15 09:35Z", sha: "6e6929f" };
+  const BUILD = { n: 122, gen: 1982, games: 14656, at: "2026-09-15 10:34Z", sha: "6de3c48" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1690,7 +1690,7 @@
           const rk = particles[ri];
           if (rk.type !== preyT) continue;
           const rd = Math.hypot(p.x - rk.x, p.y - rk.y);
-          want = noCloseOn(p, want, rk, rd, 10);
+          want = noCloseOn(p, want, rk, rd, 12);
         }
         want = paperNeverIntoScissors(p, want, null);
       }
