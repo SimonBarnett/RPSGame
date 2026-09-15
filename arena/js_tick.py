@@ -1545,6 +1545,12 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             want = _no_close_on(p, want, rock['obj'], float(rock.get('d') or 1e9), 10.0)
         if fear and fear.get('obj') is not None:
             want = _no_close_on(p, want, fear['obj'], float(fear.get('d') or 1e9), 6.0)
+    # Scissors: kite Rocks inside 8× — do not dive Paper through a Rock pile.
+    if tn == 'SCISSORS' and fear and fear.get('obj') is not None:
+        sfd = float(fear.get('d') or 1e9)
+        if sfd < p.size * 8.0:
+            want = safe_h
+            want = _no_close_on(p, want, fear['obj'], sfd, 8.0)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))

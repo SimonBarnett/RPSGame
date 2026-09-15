@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 110, gen: 1934, games: 14344, at: "2026-09-15 05:33Z", sha: "708fb53" };
+  const BUILD = { n: 111, gen: 1940, games: 14384, at: "2026-09-15 06:35Z", sha: "5c310f1" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1683,6 +1683,11 @@
         const rock = nearest(p, preyT);
         if (rock && rock.obj) want = noCloseOn(p, want, rock.obj, rock.d, 10);
         if (fear && fear.obj) want = noCloseOn(p, want, fear.obj, fear.d, 6);
+      }
+      // Scissors: kite Rocks inside 8× — do not dive Paper through a Rock pile.
+      if (p.type === 'SCISSORS' && fear && fear.obj && fear.d < p.size * 8) {
+        want = safeH;
+        want = noCloseOn(p, want, fear.obj, fear.d, 8);
       }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
