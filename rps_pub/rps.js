@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 111, gen: 1940, games: 14384, at: "2026-09-15 06:35Z", sha: "5c310f1" };
+  const BUILD = { n: 112, gen: 1940, games: 14385, at: "2026-09-15 06:42Z", sha: "bacbf1c" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -875,6 +875,11 @@
     return h;
   }
   /** If chase would pin last prey in a corner while predators live, peel to open field. */
+  function inCorner(o, W, H, band) {
+    if (!o) return false;
+    const b = band || 90;
+    return (o.x < b || o.x > W - b) && (o.y < b || o.y > H - b);
+  }
   function antiCornerHerd(p, prey, W, H) {
     if (!prey) return null;
     const m = 120;
@@ -1671,18 +1676,19 @@
         }
         want = noCloseOn(p, want, fear.obj, fd, charging ? 4 : 8);
       }
-      // Delay-feast stick: orbit while Scissors live; blend toward fear so they can intercept.
+      // Delay-feast: kite, never fly at Scissors with no Rock on the line.
       if (pDelay) {
         want = safeH;
-        if (pFd >= p.size * 5) {
+        const fo = fear && fear.obj;
+        if (fo && inCorner(fo, W, H)) {
+          want = blendHeadings(headingTo(p.x, p.y, W * 0.5, H * 0.5), safeH, 0.55);
+        } else if (pFd >= p.size * 5) {
           want = angNorm(safeH + ((p.id % 2) ? Math.PI / 2 : -Math.PI / 2));
-          if (fear && fear.obj) {
-            want = blendHeadings(want, headingTo(p.x, p.y, fear.obj.x, fear.obj.y), 0.5);
-          }
         }
         const rock = nearest(p, preyT);
         if (rock && rock.obj) want = noCloseOn(p, want, rock.obj, rock.d, 10);
-        if (fear && fear.obj) want = noCloseOn(p, want, fear.obj, fear.d, 6);
+        if (fo) want = noCloseOn(p, want, fo, fear.d, 6);
+        want = paperNeverIntoScissors(p, want, null);
       }
       // Scissors: kite Rocks inside 8× — do not dive Paper through a Rock pile.
       if (p.type === 'SCISSORS' && fear && fear.obj && fear.d < p.size * 8) {

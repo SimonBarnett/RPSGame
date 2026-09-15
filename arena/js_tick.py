@@ -381,6 +381,12 @@ def hide_among_prey(p, preys, fear):
     return h
 
 
+def _in_corner(o, W, H, band=90.0):
+    if o is None:
+        return False
+    return (o.x < band or o.x > W - band) and (o.y < band or o.y > H - band)
+
+
 def anti_corner_herd(p, prey, W, H):
     if prey is None:
         return None
@@ -1532,19 +1538,20 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             if abs(ang_diff(want, rh)) < 0.50:
                 charging = True
         want = _no_close_on(p, want, fear['obj'], fd, 4.0 if charging else 8.0)
-    # Delay-feast stick: orbit while Scissors live; blend toward fear so they can intercept.
+    # Delay-feast: kite, never fly at Scissors with no Rock on the line.
     if _pdelay:
         want = safe_h
-        if _pfd >= p.size * 5.0:
+        fo = fear['obj'] if fear and fear.get('obj') is not None else None
+        if fo is not None and _in_corner(fo, W, H):
+            want = blend_headings(heading_to(p.x, p.y, W * 0.5, H * 0.5), safe_h, 0.55)
+        elif _pfd >= p.size * 5.0:
             want = ang_norm(safe_h + (math.pi / 2 if (_pid(p) % 2) else -math.pi / 2))
-            if fear and fear.get('obj') is not None:
-                fo = fear['obj']
-                want = blend_headings(want, heading_to(p.x, p.y, fo.x, fo.y), 0.5)
         rock = nearest(p, prey_t, prey_pool)
         if rock and rock.get('obj') is not None:
             want = _no_close_on(p, want, rock['obj'], float(rock.get('d') or 1e9), 10.0)
-        if fear and fear.get('obj') is not None:
-            want = _no_close_on(p, want, fear['obj'], float(fear.get('d') or 1e9), 6.0)
+        if fo is not None:
+            want = _no_close_on(p, want, fo, float(fear.get('d') or 1e9), 6.0)
+        want = _paper_never_into_scissors(p, want, fear_pool, None)
     # Scissors: kite Rocks inside 8× — do not dive Paper through a Rock pile.
     if tn == 'SCISSORS' and fear and fear.get('obj') is not None:
         sfd = float(fear.get('d') or 1e9)
