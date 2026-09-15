@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 112, gen: 1940, games: 14385, at: "2026-09-15 06:42Z", sha: "bacbf1c" };
+  const BUILD = { n: 113, gen: 1942, games: 14393, at: "2026-09-15 07:00Z", sha: "818105b" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1034,7 +1034,7 @@
     const prey = ctx.prey && ctx.prey.obj, fear = ctx.fear && ctx.fear.obj;
     let list = (steps || []).slice();
     const CHASE_FNS = { 'time.heading': 1, 'time.eta': 1, 'intercept.heading': 1, 'intercept.lead': 1, 'intercept.chord': 1, 'lanes.heading': 1 };
-    if (state === 'LAST_PREY_RISK' || (ctx.fearN > 0 && ctx.preyN <= 1) || ctx.fearN >= 2) {
+    if (state === 'LAST_PREY_RISK' || (ctx.fearN > 0 && ctx.preyN <= 1)) {
       list = list.filter(function (s) { return !CHASE_FNS[String((s || {}).fn || '')]; });
     }
     if (state === 'CONTESTED' || state === 'SMALL_UNIT') {
@@ -1448,10 +1448,8 @@
       } else {
         prey = nearest(p, preyT);
       }
-      // Delay feast: while any Scissors live, Paper does not close on Rock.
       const pFd = fear ? fear.d : 1e9;
-      const pDelay = p.type === 'PAPER' && fearN > 0;
-      if (pDelay) prey = null;
+      const pDelay = p.type === 'PAPER' && fearN > 0 && !prey;
       if (fear && fearN > 0) {
         const near = 5 * p.size, far = 30 * p.size;
         let df = fear.d < near ? 1 : Math.max(0, 1 - (fear.d - near) / Math.max(1, far - near));
@@ -1576,7 +1574,7 @@
 
       const hideH = hideAmongPrey(p, preys, fear && fear.obj);
       if (hideH && (state === 'OUTNUMBERED' || state === 'NO_PREY_FEAR_ALIVE')
-          && !pDelay) want = blendHeadings(want, hideH, 0.35);
+          && !(p.type === 'PAPER' && fearN > 0)) want = blendHeadings(want, hideH, 0.35);
       const cornerH = antiCornerHerd(p, prey && prey.obj, W, H);
       if (cornerH && fearN > 0 && mode === 'chase') want = blendHeadings(want, cornerH, 0.4);
       const cov = coverHeading(p, fear && fear.obj, forts);
@@ -1676,17 +1674,13 @@
         }
         want = noCloseOn(p, want, fear.obj, fd, charging ? 4 : 8);
       }
-      // Delay-feast: kite, never fly at Scissors with no Rock on the line.
+      // No isolated Rock: flee. Cornered Scissors: leave the pocket. No orbit.
       if (pDelay) {
         want = safeH;
         const fo = fear && fear.obj;
         if (fo && inCorner(fo, W, H)) {
           want = blendHeadings(headingTo(p.x, p.y, W * 0.5, H * 0.5), safeH, 0.55);
-        } else if (pFd >= p.size * 5) {
-          want = angNorm(safeH + ((p.id % 2) ? Math.PI / 2 : -Math.PI / 2));
         }
-        const rock = nearest(p, preyT);
-        if (rock && rock.obj) want = noCloseOn(p, want, rock.obj, rock.d, 10);
         if (fo) want = noCloseOn(p, want, fo, fear.d, 6);
         want = paperNeverIntoScissors(p, want, null);
       }

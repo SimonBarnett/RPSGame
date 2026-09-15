@@ -810,7 +810,7 @@ def apply_moves(want, steps, ctx):
         fear = fr if fr is not None else ctx.get('fear_obj')
     lst = list(steps or [])
     fear_n, prey_n = ctx.get('fearN', 0), ctx.get('preyN', 0)
-    if state == 'LAST_PREY_RISK' or (fear_n > 0 and prey_n <= 1) or fear_n >= 2:
+    if state == 'LAST_PREY_RISK' or (fear_n > 0 and prey_n <= 1):
         lst = [s for s in lst if str((s or {}).get('fn') or '') not in CHASE_FNS]
     if state in ('CONTESTED', 'SMALL_UNIT'):
         lst = [s for s in lst if not str((s or {}).get('fn') or '').startswith('cover.')]
@@ -1279,11 +1279,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             prey = nearest(p, prey_t, prey_pool)
     else:
         prey = nearest(p, prey_t, prey_pool)
-    # Delay feast: while any Scissors live, Paper does not close on Rock.
     _pfd = float(fear.get('d') or 1e9) if fear else 1e9
-    _pdelay = tn == 'PAPER' and fear_n > 0
-    if _pdelay:
-        prey = None
+    _pdelay = tn == 'PAPER' and fear_n > 0 and prey is None
     if fear and fear.get('obj') is not None and fear_n > 0:
         fo = fear['obj']
         p._lastFear = {'x': fo.x, 'y': fo.y}
@@ -1427,7 +1424,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         roles_assign(list(allies))
     hide_h = hide_among_prey(p, preys, fear['obj'] if fear else None)
     if hide_h and state in ('OUTNUMBERED', 'NO_PREY_FEAR_ALIVE'):
-        if not _pdelay:
+        if not (tn == 'PAPER' and fear_n > 0):
             want = blend_headings(want, hide_h, 0.35)
     corner_h = anti_corner_herd(p, prey['obj'] if prey else None, W, H)
     if corner_h and fear_n > 0 and mode == 'chase':
@@ -1538,17 +1535,12 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             if abs(ang_diff(want, rh)) < 0.50:
                 charging = True
         want = _no_close_on(p, want, fear['obj'], fd, 4.0 if charging else 8.0)
-    # Delay-feast: kite, never fly at Scissors with no Rock on the line.
+    # No isolated Rock: flee. Cornered Scissors: leave the pocket. No orbit.
     if _pdelay:
         want = safe_h
         fo = fear['obj'] if fear and fear.get('obj') is not None else None
         if fo is not None and _in_corner(fo, W, H):
             want = blend_headings(heading_to(p.x, p.y, W * 0.5, H * 0.5), safe_h, 0.55)
-        elif _pfd >= p.size * 5.0:
-            want = ang_norm(safe_h + (math.pi / 2 if (_pid(p) % 2) else -math.pi / 2))
-        rock = nearest(p, prey_t, prey_pool)
-        if rock and rock.get('obj') is not None:
-            want = _no_close_on(p, want, rock['obj'], float(rock.get('d') or 1e9), 10.0)
         if fo is not None:
             want = _no_close_on(p, want, fo, float(fear.get('d') or 1e9), 6.0)
         want = _paper_never_into_scissors(p, want, fear_pool, None)
