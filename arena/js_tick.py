@@ -1592,7 +1592,8 @@ def _unstick_friends(particles):
 def collide(world, allow_convert=True):
     particles = world.particles
     types_alive = len({_tname(p) for p in particles})
-    eat_cd = 0
+    # One convert per predator per tick: touch converts, pile is not wiped in one frame.
+    eat_cd = 1
     for p in particles:
         cd = int(getattr(p, '_eat_cd', 0) or 0)
         if cd > 0:
@@ -1624,7 +1625,9 @@ def collide(world, allow_convert=True):
             if not allow_convert:
                 continue
             winner_p = a if a_eats else b
-            # Struck by a predator converts on contact. Facing / eat_cd do not save.
+            if int(getattr(winner_p, '_eat_cd', 0) or 0) > 0:
+                continue
+            # Struck by a predator converts. Facing does not save the prey.
             loser = b if a_eats else a
             lose_was = loser.type
             loser.type = winner_p.type
