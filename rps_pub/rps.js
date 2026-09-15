@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 130, gen: 2004, games: 14830, at: "2026-09-15 16:28Z", sha: "1eec9d2" };
+  const BUILD = { n: 131, gen: 2005, games: 8716, at: "2026-09-15 17:39Z", sha: "71d32c6" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1696,6 +1696,15 @@
           want = noCloseOn(p, want, rk, rd, 18);
         }
         want = paperNeverIntoScissors(p, want, null);
+      }
+      // Scissors: re-commit intercept on Paper. Last-prey abort / swarm must not dump chase.
+      if (p.type === 'SCISSORS' && prey && prey.obj) {
+        const sfd = fear ? fear.d : 1e9;
+        if (sfd >= p.size * 8) {
+          want = huntHeading(p, prey.obj, look, fear && fear.d);
+          mode = 'chase';
+          p._locked = prey.obj;
+        }
       }
       // Scissors: kite Rocks inside 8× — do not dive Paper through a Rock pile.
       if (p.type === 'SCISSORS' && fear && fear.obj && fear.d < p.size * 8) {

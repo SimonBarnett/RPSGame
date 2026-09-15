@@ -1559,6 +1559,13 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             rd = math.hypot(p.x - rk.x, p.y - rk.y)
             want = _no_close_on(p, want, rk, rd, 18.0)
         want = _paper_never_into_scissors(p, want, fear_pool, None)
+    # Scissors: re-commit intercept on Paper. Last-prey abort / swarm must not dump chase.
+    if tn == 'SCISSORS' and prey and prey.get('obj') is not None:
+        sfd = float(fear.get('d') or 1e9) if fear else 1e9
+        if sfd >= p.size * 8.0:
+            want = hunt_heading(p, prey['obj'], look, tn, sfd if fear else None)
+            mode = 'chase'
+            p._locked = prey['obj']
     # Scissors: kite Rocks inside 8× — do not dive Paper through a Rock pile.
     if tn == 'SCISSORS' and fear and fear.get('obj') is not None:
         sfd = float(fear.get('d') or 1e9)
