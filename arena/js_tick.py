@@ -1279,6 +1279,10 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             prey = nearest(p, prey_t, prey_pool)
     else:
         prey = nearest(p, prey_t, prey_pool)
+    # Paper: do not feast a Rock that is behind/beside Scissors (feeds Scissors).
+    if tn == 'PAPER' and fear and prey:
+        if float(fear.get('d') or 1e9) <= float(prey.get('d') or 0):
+            prey = None
     _pfd = float(fear.get('d') or 1e9) if fear else 1e9
     _pdelay = tn == 'PAPER' and fear_n > 0 and prey is None
     if fear and fear.get('obj') is not None and fear_n > 0:
