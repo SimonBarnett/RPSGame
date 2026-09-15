@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 113, gen: 1942, games: 14393, at: "2026-09-15 07:00Z", sha: "818105b" };
+  const BUILD = { n: 114, gen: 1942, games: 14406, at: "2026-09-15 07:12Z", sha: "b8ed5fe" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1711,7 +1711,7 @@
       if (allowConvert == null) allowConvert = true;
       const cNow = counts();
       const typesAlive = (cNow.ROCK > 0 ? 1 : 0) + (cNow.PAPER > 0 ? 1 : 0) + (cNow.SCISSORS > 0 ? 1 : 0);
-      const eatCd = typesAlive <= 2 ? 7 : 16;
+      const eatCd = 0;
       for (let k = 0; k < particles.length; k++) {
         if (particles[k]._eat_cd > 0) particles[k]._eat_cd--;
       }
@@ -1734,7 +1734,6 @@
           applyPairImpulse(a, b, nx, ny, PAIR_RESTITUTION, PAIR_FRICTION);
           if (!allowConvert) continue;
           const winnerP = aEats ? a : b;
-          if ((winnerP._eat_cd || 0) > 0) continue;
           const loser = aEats ? b : a;
           loser.type = winnerP.type;
           winnerP._eat_cd = eatCd;
