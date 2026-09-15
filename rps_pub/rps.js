@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 107, gen: 1927, games: 14225, at: "2026-09-15 03:56Z", sha: "80749d0" };
+  const BUILD = { n: 108, gen: 1928, games: 14268, at: "2026-09-15 04:09Z", sha: "3162fb8" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1674,14 +1674,15 @@
       // Delay-feast stick: orbit while Scissors live; blend toward fear so they can intercept.
       if (pDelay) {
         want = safeH;
-        if (pFd >= p.size * 4) {
+        if (pFd >= p.size * 5) {
           want = angNorm(safeH + ((p.id % 2) ? Math.PI / 2 : -Math.PI / 2));
           if (fear && fear.obj) {
-            want = blendHeadings(want, headingTo(p.x, p.y, fear.obj.x, fear.obj.y), 0.65);
+            want = blendHeadings(want, headingTo(p.x, p.y, fear.obj.x, fear.obj.y), 0.5);
           }
         }
         const rock = nearest(p, preyT);
         if (rock && rock.obj) want = noCloseOn(p, want, rock.obj, rock.d, 10);
+        if (fear && fear.obj) want = noCloseOn(p, want, fear.obj, fear.d, 6);
       }
       if (want != null) {
         const dlt = angDiff(p.angle, want);

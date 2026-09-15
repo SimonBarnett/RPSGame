@@ -1535,14 +1535,16 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     # Delay-feast stick: orbit while Scissors live; blend toward fear so they can intercept.
     if _pdelay:
         want = safe_h
-        if _pfd >= p.size * 4.0:
+        if _pfd >= p.size * 5.0:
             want = ang_norm(safe_h + (math.pi / 2 if (_pid(p) % 2) else -math.pi / 2))
             if fear and fear.get('obj') is not None:
                 fo = fear['obj']
-                want = blend_headings(want, heading_to(p.x, p.y, fo.x, fo.y), 0.65)
+                want = blend_headings(want, heading_to(p.x, p.y, fo.x, fo.y), 0.5)
         rock = nearest(p, prey_t, prey_pool)
         if rock and rock.get('obj') is not None:
             want = _no_close_on(p, want, rock['obj'], float(rock.get('d') or 1e9), 10.0)
+        if fear and fear.get('obj') is not None:
+            want = _no_close_on(p, want, fear['obj'], float(fear.get('d') or 1e9), 6.0)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
