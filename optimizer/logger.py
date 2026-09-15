@@ -317,6 +317,7 @@ class Metrics:
                 pass
         if not os.path.exists(getattr(self, 'POP_CSV', 'metrics_population.csv')):
             self._safe_write(getattr(self, 'POP_CSV', 'metrics_population.csv'), pop_header)
+        self._conv_header_ok = True
 
     def consume_used_metrics(self, conv_keep=2500, games_keep=None):
         """Cap conversions. Do not tail metrics_games.csv — the welcome
@@ -522,10 +523,13 @@ class Metrics:
 
     def _ensure_conv_header(self):
         """Write conversions CSV header including all STRATEGY_KEYS if file is new."""
+        if getattr(self, '_conv_header_ok', False):
+            return
         path = self.CONV_CSV
         try:
             import os
             if os.path.exists(path) and os.path.getsize(path) > 0:
+                self._conv_header_ok = True
                 return
         except Exception:
             pass
@@ -570,6 +574,7 @@ class Metrics:
                 base.append(sk)
         try:
             self._safe_append(path, ','.join(base) + chr(10))
+            self._conv_header_ok = True
         except Exception:
             pass
 
@@ -1203,6 +1208,11 @@ class Metrics:
         try:
             from optimizer import mcts as _mcts
             _mcts.flush()
+        except Exception:
+            pass
+        try:
+            from tools.truncate_logs import maybe_daily
+            maybe_daily()
         except Exception:
             pass
 
