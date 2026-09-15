@@ -107,8 +107,7 @@
       "CONTESTED": [
         "FORT_KITE",
         "BOUNCE_JUKE",
-        "ORBIT_KITE",
-        "SURVIVE_FEAR"
+        "ORBIT_KITE"
       ],
       "OUTNUMBERED": [
         "ORBIT_KITE",
@@ -140,8 +139,8 @@
     },
     "ROCK": {
       "CONTESTED": [
+        "CHORD_CUT",
         "SCREEN_HUNT",
-        "PACK_HUNT",
         "ETA_STRIKE",
         "LANE_SWEEP"
       ],
