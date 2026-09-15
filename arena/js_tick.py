@@ -960,7 +960,7 @@ def safest_prey(p, preys, fears):
             if d < fd:
                 fd = d
         s = fd - 0.45 * pd
-        iso = 8.0 if _tname(p) == 'PAPER' else (16.0 if _tname(p) == 'SCISSORS' else 5.5)
+        iso = 8.0 if _tname(p) == 'PAPER' else (18.0 if _tname(p) == 'SCISSORS' else 5.5)
         if fd < sz * iso:
             s -= 100.0 if _tname(p) == 'PAPER' else 80.0
         if s > best_s:
@@ -1562,16 +1562,16 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     # Scissors: re-commit intercept on Paper. Last-prey abort / swarm must not dump chase.
     if tn == 'SCISSORS' and prey and prey.get('obj') is not None:
         sfd = float(fear.get('d') or 1e9) if fear else 1e9
-        if sfd >= p.size * 16.0:
+        if sfd >= p.size * 18.0:
             want = hunt_heading(p, prey['obj'], look, tn, sfd if fear else None)
             mode = 'chase'
             p._locked = prey['obj']
-    # Scissors: kite Rocks inside 16× so converted Paper is not eaten next to Rocks.
+    # Scissors: kite Rocks inside 18× so converted Paper is not eaten next to Rocks.
     if tn == 'SCISSORS' and fear and fear.get('obj') is not None:
         sfd = float(fear.get('d') or 1e9)
-        if sfd < p.size * 16.0:
+        if sfd < p.size * 18.0:
             want = safe_h
-            want = _no_close_on(p, want, fear['obj'], sfd, 16.0)
+            want = _no_close_on(p, want, fear['obj'], sfd, 18.0)
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
