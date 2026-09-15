@@ -1267,7 +1267,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     fear_pool = (by_type or {}).get(fear_t) or pool
     ally_pool = (by_type or {}).get(tn) or pool
     fear = nearest(p, fear_t, fear_pool)
-    if tn in ('PAPER', 'ROCK') and fear_n > 0:
+    if tn in ('PAPER', 'ROCK', 'SCISSORS') and fear_n > 0:
         prey = safest_prey(p, prey_pool, fear_pool)
         if prey is None and tn != 'PAPER':
             prey = nearest(p, prey_t, prey_pool)

@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 108, gen: 1928, games: 14268, at: "2026-09-15 04:09Z", sha: "3162fb8" };
+  const BUILD = { n: 109, gen: 1931, games: 14309, at: "2026-09-15 04:52Z", sha: "4cf64f3" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1437,7 +1437,7 @@
       const preyT = PREY[p.type], fearT = FEAR[p.type];
       const fear = nearest(p, fearT);
       let prey;
-      if ((p.type === 'PAPER' || p.type === 'ROCK') && fearN > 0) {
+      if ((p.type === 'PAPER' || p.type === 'ROCK' || p.type === 'SCISSORS') && fearN > 0) {
         prey = safestPrey(p, preyT, fearT);
         if (!prey && p.type !== 'PAPER') prey = nearest(p, preyT);
       } else {
