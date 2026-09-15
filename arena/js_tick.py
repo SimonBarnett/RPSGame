@@ -505,6 +505,9 @@ def hunt_heading(p, prey, look, tn, fear_d=None):
         return intercept_heading(p, prey, 'chord')
     if tn == 'PAPER' and (fear_d is None or fear_d > p.size * 10.0):
         return intercept_heading(p, prey, 'lead')
+    # Scissors: lead-cut faster Paper. Pure look=12 chase never closes.
+    if tn == 'SCISSORS':
+        return intercept_heading(p, prey, 'lead')
     return chase_heading(p, prey, look)
 
 
@@ -1377,7 +1380,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         fear_close = fear['d'] < 8 * p.size or (fear_ahead and fear['d'] < 12 * p.size)
         paper_hunt = tn == 'PAPER' and prey
         rock_chase = tn == 'ROCK' and prey
-        if fear_close and not paper_hunt and not rock_chase:
+        scissors_hunt = tn == 'SCISSORS' and prey
+        if fear_close and not paper_hunt and not rock_chase and not scissors_hunt:
             mode = 'evade'
             want = safe_h
             p._locked = None

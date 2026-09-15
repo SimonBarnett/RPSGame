@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 129, gen: 2004, games: 14828, at: "2026-09-15 15:41Z", sha: "0011bbf" };
+  const BUILD = { n: 130, gen: 2004, games: 14830, at: "2026-09-15 16:28Z", sha: "1eec9d2" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -973,6 +973,7 @@
     if (!prey) return null;
     if (p.type === 'ROCK') return interceptHeading(p, prey, 'chord');
     if (p.type === 'PAPER' && (fearD == null || fearD > p.size * 10)) return interceptHeading(p, prey, 'lead');
+    if (p.type === 'SCISSORS') return interceptHeading(p, prey, 'lead');
     return chaseHeading(p, prey, look);
   }
   /** Chase only if convert ETA beats predator ETA (maths/time.py). */
@@ -1532,7 +1533,8 @@
         const fearClose = fear.d < 8 * p.size || (fearAhead && fear.d < 12 * p.size);
         const paperHunt = p.type === 'PAPER' && prey;
         const rockChase = p.type === 'ROCK' && prey;
-        if (fearClose && !paperHunt && !rockChase) {
+        const scissorsHunt = p.type === 'SCISSORS' && prey;
+        if (fearClose && !paperHunt && !rockChase && !scissorsHunt) {
           mode = 'evade';
           want = safeH;
           p._locked = null;
