@@ -1532,11 +1532,14 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             if abs(ang_diff(want, rh)) < 0.50:
                 charging = True
         want = _no_close_on(p, want, fear['obj'], fd, 4.0 if charging else 8.0)
-    # Delay-feast stick: evade Scissors, do not bump-convert Rock.
+    # Delay-feast stick: orbit while Scissors live; blend toward fear so they can intercept.
     if _pdelay:
         want = safe_h
         if _pfd >= p.size * 6.0:
             want = ang_norm(safe_h + (math.pi / 2 if (_pid(p) % 2) else -math.pi / 2))
+            if fear and fear.get('obj') is not None:
+                fo = fear['obj']
+                want = blend_headings(want, heading_to(p.x, p.y, fo.x, fo.y), 0.4)
         rock = nearest(p, prey_t, prey_pool)
         if rock and rock.get('obj') is not None:
             want = _no_close_on(p, want, rock['obj'], float(rock.get('d') or 1e9), 10.0)

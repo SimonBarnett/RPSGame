@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 105, gen: 1914, games: 14145, at: "2026-09-15 01:00Z", sha: "09ebf03" };
+  const BUILD = { n: 106, gen: 1921, games: 14184, at: "2026-09-15 02:34Z", sha: "669e343" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1671,11 +1671,14 @@
         }
         want = noCloseOn(p, want, fear.obj, fd, charging ? 4 : 8);
       }
-      // Delay-feast stick: evade Scissors, do not bump-convert Rock.
+      // Delay-feast stick: orbit while Scissors live; blend toward fear so they can intercept.
       if (pDelay) {
         want = safeH;
         if (pFd >= p.size * 6) {
           want = angNorm(safeH + ((p.id % 2) ? Math.PI / 2 : -Math.PI / 2));
+          if (fear && fear.obj) {
+            want = blendHeadings(want, headingTo(p.x, p.y, fear.obj.x, fear.obj.y), 0.4);
+          }
         }
         const rock = nearest(p, preyT);
         if (rock && rock.obj) want = noCloseOn(p, want, rock.obj, rock.d, 10);
