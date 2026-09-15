@@ -1535,6 +1535,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     # Delay-feast stick: evade Scissors, do not bump-convert Rock.
     if _pdelay:
         want = safe_h
+        if _pfd >= p.size * 6.0:
+            want = ang_norm(safe_h + (math.pi / 2 if (_pid(p) % 2) else -math.pi / 2))
         rock = nearest(p, prey_t, prey_pool)
         if rock and rock.get('obj') is not None:
             want = _no_close_on(p, want, rock['obj'], float(rock.get('d') or 1e9), 10.0)
