@@ -500,7 +500,10 @@ def intercept_heading(p, prey, mode):
 def hunt_heading(p, prey, look, tn, fear_d=None):
     if prey is None:
         return None
-    if tn in ('ROCK', 'PAPER') and (fear_d is None or fear_d > p.size * 10.0):
+    # Rock: chord-cut kiting Scissors even when Paper is in the 8–12× band.
+    if tn == 'ROCK':
+        return intercept_heading(p, prey, 'chord')
+    if tn == 'PAPER' and (fear_d is None or fear_d > p.size * 10.0):
         return intercept_heading(p, prey, 'lead')
     return chase_heading(p, prey, look)
 
@@ -1373,7 +1376,8 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         fear_ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fobj.x, fobj.y))) < math.pi / 2
         fear_close = fear['d'] < 8 * p.size or (fear_ahead and fear['d'] < 12 * p.size)
         paper_hunt = tn == 'PAPER' and prey
-        if fear_close and not paper_hunt:
+        rock_chase = tn == 'ROCK' and prey
+        if fear_close and not paper_hunt and not rock_chase:
             mode = 'evade'
             want = safe_h
             p._locked = None
