@@ -1545,7 +1545,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     # No isolated Rock: flee. Cornered Scissors: leave the pocket. No orbit.
     if _pdelay:
         # Blend with current heading so Scissors can intercept; no 180 kite, no orbit.
-        want = blend_headings(getattr(p, 'angle', safe_h), safe_h, 0.55)
+        want = blend_headings(getattr(p, 'angle', safe_h), safe_h, 0.40)
         fo = fear['obj'] if fear and fear.get('obj') is not None else None
         if fo is not None and _in_corner(fo, W, H):
             want = blend_headings(heading_to(p.x, p.y, W * 0.5, H * 0.5), safe_h, 0.55)
