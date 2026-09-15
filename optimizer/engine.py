@@ -3459,6 +3459,7 @@ class StrategyOptimizer:
         hist = [x for x in (getattr(self, '_playbook_nudge_hist', None) or [])
                 if gen - int(x[0]) < 8]
         seen = {x[1] for x in hist}
+        pending_cards = set(getattr(self, '_gen_change_acc', None) or [])
         care_sids = set(self._CARE_SIDS)
         stall_states = {
             'LAST_PREY_RISK', 'LAST_MAN', 'NO_PREY_FEAR_ALIVE', 'NEAR_WIPE',
@@ -3473,8 +3474,10 @@ class StrategyOptimizer:
                 except Exception:
                     scores[sid] = 0.0
 
-            def _eligible(sid):
+            def _eligible(sid, allow_pending=True):
                 if (tname, sid) in skip:
+                    return False
+                if (not allow_pending) and ('%s.%s' % (tname, sid) in pending_cards):
                     return False
                 ov = (playbook.TEAM_OVERLAYS.get(tname) or {}).get(sid) or {}
                 return self._overlay_eligible(ticks.get(sid, 0), ov)
@@ -3490,20 +3493,26 @@ class StrategyOptimizer:
                 except Exception:
                     return False
 
-            combat, stall_pool, care = [], [], []
-            for s in playbook.list_ids():
-                if not _eligible(s):
-                    continue
-                row = (int(ticks.get(s, 0) or 0), s)
-                if s in care_sids:
-                    care.append(row)
-                elif _primary_stall(s):
-                    stall_pool.append(row)
-                else:
-                    combat.append(row)
-            combat.sort(reverse=True)
-            stall_pool.sort(reverse=True)
-            care.sort(reverse=True)
+            def _build_pools(allow_pending):
+                combat, stall_pool, care = [], [], []
+                for s in playbook.list_ids():
+                    if not _eligible(s, allow_pending):
+                        continue
+                    row = (int(ticks.get(s, 0) or 0), s)
+                    if s in care_sids:
+                        care.append(row)
+                    elif _primary_stall(s):
+                        stall_pool.append(row)
+                    else:
+                        combat.append(row)
+                combat.sort(reverse=True)
+                stall_pool.sort(reverse=True)
+                care.sort(reverse=True)
+                return combat, stall_pool, care
+
+            combat, stall_pool, care = _build_pools(False)
+            if not (combat or stall_pool or care):
+                combat, stall_pool, care = _build_pools(True)
 
             def _nudge_pool(pool):
                 nonlocal n_chg, n_elig, n_dir0
@@ -3580,7 +3589,10 @@ class StrategyOptimizer:
             _nudge_pool(stall_pool[:2])
             _nudge_pool(care[:1])
         self._playbook_nudge_hist = hist
-        written = playbook.save_all_overlays()
+        try:
+            playbook.save_all_overlays()
+        except Exception as e:
+            self._log_raw('playbook save failed: %s' % e)
         self._log_raw(
             'playbook strategy pass changes=%d wrote=%d eligible=%d dir0=%d strategies=%d skip=%d' % (
                 n_chg, n_chg, n_elig, n_dir0, len(playbook.list_ids()), len(skip)))
@@ -3738,6 +3750,21 @@ class StrategyOptimizer:
         max_per = int(getattr(self, 'BO_MAX_PER_TYPE', 2))
         dead = self._load_gp_dead()
         dead_dirty = False
+        gen = int(getattr(self, 'GENERATION', 0) or 0)
+        ei_hist = [x for x in (getattr(self, '_gp_ei_hist', None) or [])
+                   if gen - int(x[0]) < 8]
+        ei_seen = {x[1] for x in ei_hist}
+        pending_cards = set(getattr(self, '_gen_change_acc', None) or [])
+        n_rot = 0
+
+        def _blocked(tname, sid):
+            nonlocal n_rot
+            k = '%s.%s' % (tname, sid)
+            if k in ei_seen or k in pending_cards:
+                n_rot += 1
+                return True
+            return False
+
         for tname in ('ROCK', 'PAPER', 'SCISSORS'):
             bag = playbook.TEAM_OVERLAYS.get(tname) or {}
             used = ticks_all.get(tname) or {}
@@ -3768,6 +3795,8 @@ class StrategyOptimizer:
                             dead[key] = 3
                             dead_dirty = True
                         continue
+                    if _blocked(tname, sid):
+                        continue
                     chosen = (y, sid, ov)
                     break
                 if chosen:
@@ -3780,7 +3809,7 @@ class StrategyOptimizer:
                 hunt_wr = -1.0
                 for sid in ('CLEAR_SPLIT', 'SCREEN_HUNT', 'OPEN_KITE', 'PACK_HUNT'):
                     ov = bag.get(sid)
-                    if not ov:
+                    if not ov or sid in seen or _blocked(tname, sid):
                         continue
                     st = (ov.get('stats') or {})
                     g = float(st.get('games') or 0)
@@ -3793,7 +3822,7 @@ class StrategyOptimizer:
                     seen.add(hunt_best[0])
                     self._log_raw('GP-EI hunt %s.%s wr=%.3f' % (tname, hunt_best[0], hunt_wr))
             for _, _, sid, ov in played:
-                if sid in seen:
+                if sid in seen or _blocked(tname, sid):
                     continue
                 picked.append((sid, ov))
                 seen.add(sid)
@@ -3801,7 +3830,7 @@ class StrategyOptimizer:
                     break
             if tname in explore and len(picked) < max_per:
                 for y, sid, ov in rescue:
-                    if sid in seen:
+                    if sid in seen or _blocked(tname, sid):
                         continue
                     key = (tname, sid)
                     if float(y) < -1.5 or int(dead.get(key, 0) or 0) >= 3:
@@ -3838,7 +3867,12 @@ class StrategyOptimizer:
                     # still a proposal — count the card so playbook skips it
                     moved.append('ei')
                 done.add((tname, sid))
+                ei_hist.append((gen, '%s.%s' % (tname, sid)))
+                ei_seen.add('%s.%s' % (tname, sid))
                 self.last_changes.append('%s.%s GP-EI %s' % (tname, sid, ', '.join(moved[:3])))
+        self._gp_ei_hist = ei_hist
+        if n_rot:
+            self._log_raw('GP-EI skip rotated %d' % n_rot)
         if dead_dirty:
             self._gp_dead = dead
             self._save_gp_dead()

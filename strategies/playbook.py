@@ -139,7 +139,13 @@ def _disk_overlay(ov, for_js=False):
 
 
 def _write_json(path, data):
-    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    d = os.path.dirname(path) or '.'
+    try:
+        os.makedirs(d, exist_ok=True)
+    except OSError:
+        # WinError 183 on SMB: exist_ok still races when the dir already exists
+        if not os.path.isdir(d):
+            raise
     payload = json.dumps(data, separators=(',', ':'), ensure_ascii=False)
     tmp = path + '.tmp'
     try:

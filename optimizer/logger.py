@@ -34,28 +34,32 @@ class Metrics:
     POP_CSV = log_path('metrics_population.csv')
     SUMMARY = log_path('metrics_summary.txt')
     TOTAL_FILE = log_path('games_total.txt')
+    GAMES_HIGHWATER = log_path('games_highwater.txt')
     GEN_FILE = log_path('generation.txt')
+    GEN_HIGHWATER = log_path('generation_highwater.txt')
     GEN_PENDING_FILE = log_path('generation_pending.txt')
 
     @classmethod
-    def read_games_total(cls):
-        import os
-        path = getattr(cls, 'TOTAL_FILE', log_path('games_total.txt'))
-        n = 0
+    def _read_int_file(cls, path):
         try:
             with open(path, encoding='utf-8') as f:
-                n = int(float(f.read().strip() or 0))
+                return int(float(f.read().strip() or 0))
         except Exception:
-            n = 0
-        # Floor from current csv length if the counter file is missing/stale.
-        try:
-            gp = cls.GAMES_CSV
-            if os.path.isfile(gp):
-                with open(gp, encoding='utf-8') as f:
-                    rows = max(0, sum(1 for _ in f) - 1)
-                n = max(n, rows)
-        except Exception:
-            pass
+            return 0
+
+    @classmethod
+    def read_games_total(cls):
+        n = max(cls._read_int_file(cls.TOTAL_FILE), cls._read_int_file(cls.GAMES_HIGHWATER))
+        # CSV length is bootstrap only. A truncated CSV must never pull a
+        # healthy counter down after a NAS miss (write would persist the low value).
+        if n <= 0:
+            try:
+                gp = cls.GAMES_CSV
+                if os.path.isfile(gp):
+                    with open(gp, encoding='utf-8') as f:
+                        n = max(0, sum(1 for _ in f) - 1)
+            except Exception:
+                pass
         return max(0, n)
 
     @classmethod
@@ -77,7 +81,11 @@ class Metrics:
 
     @classmethod
     def write_games_total(cls, n):
-        return cls._atomic_write_int(cls.TOTAL_FILE, n)
+        n = cls._atomic_write_int(cls.TOTAL_FILE, n)
+        hw = cls._read_int_file(cls.GAMES_HIGHWATER)
+        if n > hw:
+            cls._atomic_write_int(cls.GAMES_HIGHWATER, n)
+        return n
 
     @classmethod
     def bump_games_total(cls):
@@ -86,17 +94,15 @@ class Metrics:
 
     @classmethod
     def read_generation(cls):
-        n = 0
-        try:
-            with open(cls.GEN_FILE, encoding='utf-8') as f:
-                n = int(float(f.read().strip() or 0))
-        except Exception:
-            n = 0
-        return max(0, n)
+        return max(0, cls._read_int_file(cls.GEN_FILE), cls._read_int_file(cls.GEN_HIGHWATER))
 
     @classmethod
     def write_generation(cls, n):
-        return cls._atomic_write_int(cls.GEN_FILE, n)
+        n = cls._atomic_write_int(cls.GEN_FILE, n)
+        hw = cls._read_int_file(cls.GEN_HIGHWATER)
+        if n > hw:
+            cls._atomic_write_int(cls.GEN_HIGHWATER, n)
+        return n
 
     @classmethod
     def bump_generation(cls):

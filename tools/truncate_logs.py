@@ -77,6 +77,7 @@ def run(force=False):
     if not force and _already_today():
         return []
     done = []
+    # Never touch games_total.txt, generation.txt, or *highwater.txt.
     jobs = [
         (log_path("metrics_optimize.log"), KEEP_LOG, False),
         (log_path("metrics_perf.log"), KEEP_LOG, False),
