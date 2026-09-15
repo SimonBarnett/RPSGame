@@ -72,6 +72,9 @@ class StrategyOptimizer:
             StrategyOptimizer.GENERATION = int(Metrics.read_generation() or 0)
             self.games_seen = int(Metrics.read_games_total() or 0)
             self._gen_change_acc = set(Metrics.read_generation_pending() or [])
+            self._gen_change_acc = {
+                self._change_key(x) or x for x in self._gen_change_acc if x}
+            self._gen_change_acc.discard('')
         except Exception:
             pass
         self._ga_pop = None          # legacy type-wide (unused)
@@ -3871,6 +3874,8 @@ class StrategyOptimizer:
         if not getattr(self, '_pending_generation', False):
             return
         acc = set(getattr(self, '_gen_change_acc', None) or [])
+        acc = {self._change_key(x) or x for x in acc if x}
+        acc.discard('')
         new_n = 0
         for line in (self.last_changes or []):
             k = self._change_key(line)
