@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 119, gen: 1955, games: 14545, at: "2026-09-15 08:22Z", sha: "e019d63" };
+  const BUILD = { n: 120, gen: 1967, games: 14588, at: "2026-09-15 08:46Z", sha: "52cc3af" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1684,6 +1684,12 @@
           want = blendHeadings(headingTo(p.x, p.y, W * 0.5, H * 0.5), safeH, 0.55);
         }
         if (fo) want = noCloseOn(p, want, fo, fear.d, 6);
+        for (let ri = 0; ri < particles.length; ri++) {
+          const rk = particles[ri];
+          if (rk.type !== preyT) continue;
+          const rd = Math.hypot(p.x - rk.x, p.y - rk.y);
+          want = noCloseOn(p, want, rk, rd, 10);
+        }
         want = paperNeverIntoScissors(p, want, null);
       }
       // Scissors: kite Rocks inside 8× — do not dive Paper through a Rock pile.
