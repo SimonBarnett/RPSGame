@@ -3849,7 +3849,7 @@ class StrategyOptimizer:
 
     @staticmethod
     def _change_key(line):
-        """Identity of a moved knob. Values and GP-EI payloads must not mint new keys."""
+        """Card identity for GEN. Four paths on one overlay must not mint four keys."""
         s = str(line or '').strip()
         if not s:
             return ''
@@ -3857,9 +3857,12 @@ class StrategyOptimizer:
         if s.endswith(' match'):
             s = s[:-6].strip()
         if ' GP-EI ' in s:
-            return s.split(' GP-EI ', 1)[0].strip()
-        if ' -> ' in s:
+            s = s.split(' GP-EI ', 1)[0].strip()
+        elif ' -> ' in s:
             s = s.split(' -> ', 1)[0]
+        parts = s.split('.')
+        if len(parts) >= 2 and parts[0] in ('ROCK', 'PAPER', 'SCISSORS'):
+            return '%s.%s' % (parts[0], parts[1])
         return s.strip()
 
     def _commit_new_generation(self, written):
