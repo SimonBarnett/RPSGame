@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 127, gen: 1999, games: 14780, at: "2026-09-15 14:07Z", sha: "4fd62ce" };
+  const BUILD = { n: 128, gen: 2002, games: 14812, at: "2026-09-15 15:07Z", sha: "22c7fb1" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1681,7 +1681,7 @@
       // No isolated Rock: flee. Cornered Scissors: leave the pocket. No orbit.
       if (pDelay) {
         // Blend with current heading so Scissors can intercept; no 180 kite, no orbit.
-        want = blendHeadings(p.angle, safeH, 0.40);
+        want = blendHeadings(p.angle, safeH, 0.30);
         const fo = fear && fear.obj;
         if (fo && inCorner(fo, W, H)) {
           want = blendHeadings(headingTo(p.x, p.y, W * 0.5, H * 0.5), safeH, 0.55);
