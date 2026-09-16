@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 140, gen: 2031, games: 15799, at: "2026-09-16 01:35Z", sha: "40bd939" };
+  const BUILD = { n: 141, gen: 2035, games: 15838, at: "2026-09-16 03:05Z", sha: "6cb3020" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1720,9 +1720,9 @@
           const d = Math.hypot(p.x - q.x, p.y - q.y);
           if (d < scrumD) { scrum = q; scrumD = d; }
         }
-        if (scrum && scrumD < p.size * 14) {
-          want = noCloseOn(p, want, scrum, scrumD, 12);
-          if (scrumD < p.size * 12) {
+        if (scrum && scrumD < p.size * 16) {
+          want = noCloseOn(p, want, scrum, scrumD, 14);
+          if (scrumD < p.size * 14) {
             want = safeH;
             mode = 'bias';
           }
