@@ -1582,9 +1582,9 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             d = math.hypot(p.x - q.x, p.y - q.y)
             if d < scrum_d:
                 scrum, scrum_d = q, d
-        if scrum is not None and scrum_d < p.size * 16.0:
-            want = _no_close_on(p, want, scrum, scrum_d, 14.0)
-            if scrum_d < p.size * 14.0:
+        if scrum is not None and scrum_d < p.size * 18.0:
+            want = _no_close_on(p, want, scrum, scrum_d, 16.0)
+            if scrum_d < p.size * 16.0:
                 want = safe_h
                 mode = 'bias'
             p._locked = None
