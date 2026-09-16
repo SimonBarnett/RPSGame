@@ -1289,7 +1289,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     # Isolated Rock only when Scissors are far — else S never finishes last.
     if tn == 'PAPER' and fear_n > 0:
         fd = float(fear.get('d') or 1e9) if fear else 1e9
-        if fd < p.size * 20.0 or not prey or fd <= float(prey.get('d') or 0):
+        if fd < p.size * 28.0 or not prey or fd <= float(prey.get('d') or 0):
             prey = None
     _pfd = float(fear.get('d') or 1e9) if fear else 1e9
     _pdelay = tn == 'PAPER' and fear_n > 0 and prey is None
