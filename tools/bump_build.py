@@ -21,17 +21,32 @@ GAMES_FILE = os.path.join(ROOT, "optimizer", "metrics", "games_total.txt")
 OPT_LOG = os.path.join(ROOT, "optimizer", "metrics", "metrics_optimize.log")
 
 
-def _read_games():
+def _read_int(path):
     try:
-        return int(open(GAMES_FILE, encoding="utf-8").read().strip() or 0)
+        return int(float(open(path, encoding="utf-8").read().strip() or 0))
     except Exception:
         return 0
+
+
+def _read_games():
+    return max(
+        _read_int(GAMES_FILE),
+        _read_int(os.path.join(ROOT, "optimizer", "metrics", "games_highwater.txt")),
+        _read_int(os.path.join(os.path.expanduser("~"), ".grok", "rps_highwater.txt")),
+    )
 
 
 GEN_FILE = os.path.join(ROOT, "optimizer", "metrics", "generation.txt")
 
 
 def _read_gen():
+    n = max(
+        _read_int(GEN_FILE),
+        _read_int(os.path.join(ROOT, "optimizer", "metrics", "generation_highwater.txt")),
+        _read_int(os.path.join(os.path.expanduser("~"), ".grok", "rps_gen_highwater.txt")),
+    )
+    if n:
+        return n
     try:
         return int(open(GEN_FILE, encoding="utf-8").read().strip() or 0)
     except Exception:

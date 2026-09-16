@@ -63,11 +63,15 @@ _BOOK_CACHE = {}
 
 
 def _read_json(path, default=None):
-    """NAS errno 22/59 must not look like a missing file (that seed-wipes / drops cards)."""
+    """NAS errno 22/59 / empty files must not look like a missing card (seed-wipe)."""
     for _ in range(4):
         try:
             with open(path, encoding='utf-8') as f:
-                return json.load(f)
+                raw = f.read()
+            if not raw or not raw.strip():
+                time.sleep(0.12)
+                continue
+            return json.loads(raw)
         except FileNotFoundError:
             return default
         except OSError as e:
@@ -77,6 +81,9 @@ def _read_json(path, default=None):
                 time.sleep(0.12)
                 continue
             return default
+        except json.JSONDecodeError:
+            time.sleep(0.12)
+            continue
         except Exception:
             return default
     return default
@@ -151,7 +158,31 @@ def _disk_overlay(ov, for_js=False):
     return out
 
 
+_MIN_JSON_BYTES = 32
+
+
+def _fast_sim():
+    try:
+        from config import Config
+        return bool(getattr(Config, 'FAST_SIM', False))
+    except Exception:
+        return False
+
+
+def _write_tmp_payload(tmp, payload):
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(payload)
+        f.flush()
+        if not _fast_sim():
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                pass
+    return os.path.getsize(tmp) >= _MIN_JSON_BYTES
+
+
 def _write_json(path, data):
+    """Never truncate dest. A failed NAS write must leave the previous overlay intact."""
     d = os.path.dirname(path) or '.'
     try:
         os.makedirs(d, exist_ok=True)
@@ -160,29 +191,70 @@ def _write_json(path, data):
         if not os.path.isdir(d):
             raise
     payload = json.dumps(data, separators=(',', ':'), ensure_ascii=False)
+    if not isinstance(data, dict) or len(payload) < _MIN_JSON_BYTES:
+        return
     tmp = path + '.tmp'
+    alt = path + '.new'
     try:
-        with open(tmp, 'w', encoding='utf-8') as f:
-            f.write(payload)
-        try:
-            os.replace(tmp, path)
-        except OSError:
-            # WinError 5: dest locked/read-only — write in place
-            try:
-                os.chmod(path, 0o666)
-            except Exception:
-                pass
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(payload)
+        if not _write_tmp_payload(tmp, payload):
             try:
                 os.remove(tmp)
             except Exception:
                 pass
-    except Exception:
+            return
+        bak = None
         try:
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(payload)
+            if (not _fast_sim()) and os.path.isfile(path) and os.path.getsize(path) >= _MIN_JSON_BYTES:
+                bak = path + '.bak'
+                try:
+                    with open(path, 'rb') as src, open(bak, 'wb') as dst:
+                        dst.write(src.read())
+                        dst.flush()
+                        try:
+                            os.fsync(dst.fileno())
+                        except OSError:
+                            pass
+                except OSError:
+                    bak = None
+            os.replace(tmp, path)
+            try:
+                if os.path.getsize(path) < _MIN_JSON_BYTES and bak:
+                    os.replace(bak, path)
+                    bak = None
+                    return
+            except OSError:
+                if bak:
+                    try:
+                        os.replace(bak, path)
+                    except OSError:
+                        pass
+                return
+            return
         except OSError:
+            try:
+                os.chmod(path, 0o666)
+            except Exception:
+                pass
+            try:
+                if _write_tmp_payload(alt, payload):
+                    os.replace(alt, path)
+                    try:
+                        if os.path.getsize(path) < _MIN_JSON_BYTES and bak:
+                            os.replace(bak, path)
+                    except OSError:
+                        pass
+            except OSError:
+                if bak:
+                    try:
+                        os.replace(bak, path)
+                    except OSError:
+                        pass
+    except Exception:
+        pass
+    for p in (tmp, alt):
+        try:
+            os.remove(p)
+        except Exception:
             pass
 
 

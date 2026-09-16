@@ -38,6 +38,9 @@ class Metrics:
     GEN_FILE = log_path('generation.txt')
     GEN_HIGHWATER = log_path('generation_highwater.txt')
     GEN_PENDING_FILE = log_path('generation_pending.txt')
+    # Off the NAS so a truncated CSV + M: miss cannot reset counters.
+    LOCAL_HW = os.path.join(os.path.expanduser("~"), ".grok", "rps_highwater.txt")
+    LOCAL_GEN_HW = os.path.join(os.path.expanduser("~"), ".grok", "rps_gen_highwater.txt")
 
     @classmethod
     def _read_int_file(cls, path):
@@ -49,9 +52,12 @@ class Metrics:
 
     @classmethod
     def read_games_total(cls):
-        n = max(cls._read_int_file(cls.TOTAL_FILE), cls._read_int_file(cls.GAMES_HIGHWATER))
-        # CSV length is bootstrap only. A truncated CSV must never pull a
-        # healthy counter down after a NAS miss (write would persist the low value).
+        n = max(
+            cls._read_int_file(cls.TOTAL_FILE),
+            cls._read_int_file(cls.GAMES_HIGHWATER),
+            cls._read_int_file(cls.LOCAL_HW),
+        )
+        # CSV length is bootstrap only — never a downward floor.
         if n <= 0:
             try:
                 gp = cls.GAMES_CSV
@@ -70,21 +76,36 @@ class Metrics:
         try:
             with open(tmp, 'w', encoding='utf-8') as f:
                 f.write(text)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+            if os.path.getsize(tmp) < 1:
+                try:
+                    os.remove(tmp)
+                except Exception:
+                    pass
+                return n
             os.replace(tmp, path)
         except Exception:
             try:
-                with open(path, 'w', encoding='utf-8') as f:
-                    f.write(text)
+                os.remove(tmp)
             except Exception:
                 pass
         return n
 
     @classmethod
     def write_games_total(cls, n):
-        n = cls._atomic_write_int(cls.TOTAL_FILE, n)
-        hw = cls._read_int_file(cls.GAMES_HIGHWATER)
+        hw = max(cls._read_int_file(cls.GAMES_HIGHWATER), cls._read_int_file(cls.LOCAL_HW))
+        if hw > 0 and n < hw:
+            n = hw
+        cls._atomic_write_int(cls.TOTAL_FILE, n)
         if n > hw:
             cls._atomic_write_int(cls.GAMES_HIGHWATER, n)
+            cls._atomic_write_int(cls.LOCAL_HW, n)
+        elif hw > 0:
+            cls._atomic_write_int(cls.LOCAL_HW, hw)
         return n
 
     @classmethod
@@ -94,14 +115,25 @@ class Metrics:
 
     @classmethod
     def read_generation(cls):
-        return max(0, cls._read_int_file(cls.GEN_FILE), cls._read_int_file(cls.GEN_HIGHWATER))
+        return max(
+            0,
+            cls._read_int_file(cls.GEN_FILE),
+            cls._read_int_file(cls.GEN_HIGHWATER),
+            cls._read_int_file(cls.LOCAL_GEN_HW),
+        )
 
     @classmethod
     def write_generation(cls, n):
-        n = cls._atomic_write_int(cls.GEN_FILE, n)
-        hw = cls._read_int_file(cls.GEN_HIGHWATER)
+        n = max(0, int(n))
+        hw = max(cls._read_int_file(cls.GEN_HIGHWATER), cls._read_int_file(cls.LOCAL_GEN_HW))
+        if hw > 0 and n < hw:
+            n = hw
+        cls._atomic_write_int(cls.GEN_FILE, n)
         if n > hw:
             cls._atomic_write_int(cls.GEN_HIGHWATER, n)
+            cls._atomic_write_int(cls.LOCAL_GEN_HW, n)
+        elif hw > 0:
+            cls._atomic_write_int(cls.LOCAL_GEN_HW, hw)
         return n
 
     @classmethod
