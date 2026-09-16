@@ -1572,6 +1572,22 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         if sfd < p.size * 20.0:
             want = safe_h
             want = _no_close_on(p, want, fear['obj'], sfd, 20.0)
+    # Rock: do not dive into a Scissors that just converted from Paper.
+    if tn == 'ROCK':
+        scrum = None
+        scrum_d = 1e9
+        for q in prey_pool:
+            if int(getattr(q, '_fresh_convert', 0) or 0) <= 0:
+                continue
+            d = math.hypot(p.x - q.x, p.y - q.y)
+            if d < scrum_d:
+                scrum, scrum_d = q, d
+        if scrum is not None and scrum_d < p.size * 14.0:
+            want = _no_close_on(p, want, scrum, scrum_d, 12.0)
+            if scrum_d < p.size * 12.0:
+                want = safe_h
+                mode = 'bias'
+            p._locked = None
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
@@ -1620,6 +1636,9 @@ def collide(world, allow_convert=True):
         cd = int(getattr(p, '_eat_cd', 0) or 0)
         if cd > 0:
             p._eat_cd = cd - 1
+        fc = int(getattr(p, '_fresh_convert', 0) or 0)
+        if fc > 0:
+            p._fresh_convert = fc - 1
     for i in range(len(particles)):
         a = particles[i]
         for j in range(i + 1, len(particles)):
@@ -1656,6 +1675,7 @@ def collide(world, allow_convert=True):
             lose_was = loser.type
             loser.type = winner_p.type
             loser._tn = _tname(winner_p)
+            loser._fresh_convert = 90
             winner_p._eat_cd = eat_cd
             W = float(getattr(world, 'width', 800) or 800)
             H = float(getattr(world, 'height', 600) or 600)

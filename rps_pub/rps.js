@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 138, gen: 2025, games: 15731, at: "2026-09-15 23:16Z", sha: "5678697" };
+  const BUILD = { n: 139, gen: 2028, games: 15764, at: "2026-09-16 00:22Z", sha: "6ca538e" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1711,6 +1711,24 @@
         want = safeH;
         want = noCloseOn(p, want, fear.obj, fear.d, 20);
       }
+      // Rock: do not dive into a Scissors that just converted from Paper.
+      if (p.type === 'ROCK') {
+        let scrum = null, scrumD = 1e9;
+        for (let qi = 0; qi < particles.length; qi++) {
+          const q = particles[qi];
+          if (q.type !== preyT || !(q._fresh_convert > 0)) continue;
+          const d = Math.hypot(p.x - q.x, p.y - q.y);
+          if (d < scrumD) { scrum = q; scrumD = d; }
+        }
+        if (scrum && scrumD < p.size * 14) {
+          want = noCloseOn(p, want, scrum, scrumD, 12);
+          if (scrumD < p.size * 12) {
+            want = safeH;
+            mode = 'bias';
+          }
+          p._locked = null;
+        }
+      }
       if (want != null) {
         const dlt = angDiff(p.angle, want);
         p.angle = angNorm(p.angle + Math.max(-maxTurn, Math.min(maxTurn, dlt)));
@@ -1736,6 +1754,7 @@
       const eatCd = 1;
       for (let k = 0; k < particles.length; k++) {
         if (particles[k]._eat_cd > 0) particles[k]._eat_cd--;
+        if (particles[k]._fresh_convert > 0) particles[k]._fresh_convert--;
       }
       for (let i = 0; i < particles.length; i++) {
         const a = particles[i];
@@ -1762,6 +1781,7 @@
           const winnerP = aEats ? a : b;
           const loser = aEats ? b : a;
           loser.type = winnerP.type;
+          loser._fresh_convert = 90;
           winnerP._eat_cd = eatCd;
           const keep = (motion[winnerP.type] || DEFAULT_MOTION[winnerP.type]).speed * CRUISE_MULT * worldK * COLLISION_SPEED_KEEP;
           a.speed = keep; b.speed = keep;
