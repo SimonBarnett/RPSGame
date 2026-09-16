@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 152, gen: 2105, games: 16159, at: "2026-09-16 11:04Z", sha: "1e863df" };
+  const BUILD = { n: 157, gen: 2139, games: 16292, at: "2026-09-16 13:18Z", sha: "be4e5f9" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1454,7 +1454,7 @@
       // Isolated Rock only when Scissors are far — else S never finishes last.
       if (p.type === 'PAPER' && fearN > 0) {
         const fd = fear ? fear.d : 1e9;
-        if (fd < p.size * 36 || !prey || fd <= prey.d) prey = null;
+        if (fd < p.size * 44 || !prey || fd <= prey.d) prey = null;
       }
       const pFd = fear ? fear.d : 1e9;
       const pDelay = p.type === 'PAPER' && fearN > 0 && !prey;
@@ -1616,7 +1616,7 @@
         const hard = p.size * ((p.type === 'PAPER' || p.type === 'ROCK') ? 6 : 4.5);
         const soft = p.size * ((p.type === 'PAPER' || p.type === 'ROCK') ? 8 : 6.5);
         const paperHunt = p.type === 'PAPER' && prey && prey.obj;
-        if (fd < hard && !paperHunt) { want = flee; mode = 'evade'; }
+        if (fd < hard) { want = flee; mode = 'evade'; }
         else if (fd < soft && (fd < pd || inPath) && !paperHunt) want = blendHeadings(want, flee, 0.65);
         if (state === 'LAST_MAN' && fd < p.size * 9) { want = flee; mode = 'evade'; }
       }
@@ -1629,8 +1629,7 @@
       }
       if (want != null) {
         const steered = fearClumpSteer(p, want);
-        const paperHuntClump = p.type === 'PAPER' && prey && prey.obj;
-        if (steered && !(steered.close && paperHuntClump)) {
+        if (steered) {
           want = steered.h; if (steered.close) mode = 'evade';
         }
       }
@@ -1651,10 +1650,10 @@
       }
       if (nearN >= 3) want = blendHeadings(want, desyncHeading(p, prey && prey.obj), 0.3);
 
-      // evasion brake / reverse (Python apply_evasion, compact)
-      if (mode === 'evade' && fear && fear.d < p.size * 6) {
+      if (fear && fear.obj) {
         const ahead = Math.abs(angDiff(p.angle, headingTo(p.x, p.y, fear.obj.x, fear.obj.y)));
-        if (ahead < 0.6) p.speed *= 0.72;
+        if (p.type === 'PAPER' && ahead < 0.85 && fear.d < p.size * 12) p.speed *= 0.50;
+        else if (mode === 'evade' && fear.d < p.size * 6 && ahead < 0.6) p.speed *= 0.72;
       }
 
       for (let fi = 0; fi < forts.length; fi++) {
@@ -1674,15 +1673,9 @@
 
       want = avoidFearOverlap(p, want);
       want = paperNeverIntoScissors(p, want, prey && prey.obj);
-      // Paper: 8× keep-out while kiting; last-meter (4×) even while charging.
+      // Paper: never close on Scissors. Charging a Rock does not punch through.
       if (p.type === 'PAPER' && fear && fear.obj) {
-        const fd = fear.d;
-        let charging = false;
-        if (prey && prey.obj && want != null) {
-          const rh = headingTo(p.x, p.y, prey.obj.x, prey.obj.y);
-          if (Math.abs(angDiff(want, rh)) < 0.50) charging = true;
-        }
-        want = noCloseOn(p, want, fear.obj, fd, charging ? 4 : 8);
+        want = noCloseOn(p, want, fear.obj, fear.d, 12);
       }
       // No isolated Rock: flee. Cornered Scissors: leave the pocket. No orbit.
       if (pDelay) {
@@ -1757,10 +1750,33 @@
     }
 
     /** Convert-on-contact (RPS) or same-type separate. Collisions halve speed. */
+    function pairGraze(a, b) {
+      const minD = a.size + b.size;
+      const extra = Math.max(2.0, 0.30 * minD);
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < minD + extra) return { hit: true, dist: dist, dx: dx, dy: dy, minD: minD };
+      const ax0 = (a._px == null) ? a.x : a._px, ay0 = (a._py == null) ? a.y : a._py;
+      const bx0 = (b._px == null) ? b.x : b._px, by0 = (b._py == null) ? b.y : b._py;
+      const r0x = bx0 - ax0, r0y = by0 - ay0;
+      const rex = (b.x - bx0) - (a.x - ax0);
+      const rey = (b.y - by0) - (a.y - ay0);
+      const denom = rex * rex + rey * rey;
+      let t = 0;
+      if (denom > 1e-12) {
+        t = -(r0x * rex + r0y * rey) / denom;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+      }
+      const cx = r0x + t * rex, cy = r0y + t * rey;
+      const closest = Math.hypot(cx, cy);
+      if (closest < minD + extra) {
+        if (dist >= 1e-8) return { hit: true, dist: dist, dx: dx, dy: dy, minD: minD };
+        return { hit: true, dist: Math.max(closest, 1e-8), dx: cx, dy: cy, minD: minD };
+      }
+      return { hit: false, dist: dist, dx: dx, dy: dy, minD: minD };
+    }
     function collide(allowConvert) {
       if (allowConvert == null) allowConvert = true;
-      const cNow = counts();
-      const typesAlive = (cNow.ROCK > 0 ? 1 : 0) + (cNow.PAPER > 0 ? 1 : 0) + (cNow.SCISSORS > 0 ? 1 : 0);
       const eatCd = 1;
       for (let k = 0; k < particles.length; k++) {
         if (particles[k]._eat_cd > 0) particles[k]._eat_cd--;
@@ -1770,12 +1786,11 @@
         const a = particles[i];
         for (let j = i + 1; j < particles.length; j++) {
           const b = particles[j];
-          const dx = b.x - a.x, dy = b.y - a.y;
-          const dist = Math.hypot(dx, dy);
-          const minD = a.size + b.size;
-          if (dist < 1e-8) continue;
-          const graze = dist < minD + Math.max(1.5, 0.20 * minD);
-          if (!graze) continue;
+          const g = pairGraze(a, b);
+          if (!g.hit) continue;
+          let dist = g.dist, dx = g.dx, dy = g.dy;
+          const minD = g.minD;
+          if (dist < 1e-8) { dist = 1e-8; if (Math.abs(dx) + Math.abs(dy) < 1e-8) { dx = 1; dy = 0; } }
           const nx = dx / dist, ny = dy / dist;
           if (dist < minD) {
             const push = (minD - dist + SEPARATION_SLOP) * (a.type === b.type ? 1.15 : 0.55);
@@ -1805,7 +1820,7 @@
     function paperNeverIntoScissors(p, want, prey) {
       if (want == null || p.type !== 'PAPER') return want;
       const fearT = FEAR[p.type];
-      const cap = (p.size * 14) * (p.size * 14);
+      const cap = (p.size * 22) * (p.size * 22);
       let best = null, bestD2 = 1e18, sx = 0, sy = 0, n = 0;
       for (let i = 0; i < particles.length; i++) {
         const q = particles[i];
@@ -1848,6 +1863,9 @@
         return clipsXY(h, cx, cy, reach, p.size * 0.5);
       };
       const intoScissors = function (h) {
+        const reach = Math.max(dNear, p.size * 12);
+        const rad = p.size + (best.size || p.size);
+        if (clipsXY(h, best.x, best.y, reach, rad)) return true;
         if (dNear < p.size * 10 && Math.abs(angDiff(h, nearH)) < 0.70) return true;
         if (dPack < p.size * 10 && Math.abs(angDiff(h, packH)) < 0.55) return true;
         return false;
@@ -1856,9 +1874,6 @@
         if (!intoScissors(h)) return h;
         if (prey) {
           const rh = headingTo(p.x, p.y, prey.x, prey.y);
-          const pdR = Math.hypot(prey.x - p.x, prey.y - p.y);
-          if (Math.abs(angDiff(h, rh)) < 0.50
-              && !(clips(h, pdR) || clipsXY(h, best.x, best.y, pdR, p.size))) return h;
           if (!intoScissors(rh)) return rh;
           const s = angDiff(packH, rh) >= 0 ? 1 : -1;
           const wrap = angNorm(packH + s * (Math.PI * 0.5));
@@ -1878,8 +1893,6 @@
       const beside = Math.abs(angDiff(hunt, packH)) > Math.PI * 0.5;
       const onLine = clips(hunt, pd) || clipsXY(hunt, best.x, best.y, pd, p.size);
       if (beside || !onLine || dPack >= p.size * 4) {
-        const rh = headingTo(p.x, p.y, prey.x, prey.y);
-        if (!intoScissors(hunt) || Math.abs(angDiff(hunt, rh)) < 0.50) return hunt;
         return notIntoScissors(hunt);
       }
       const sign = angDiff(packH, hunt) >= 0 ? 1 : -1;
@@ -2028,6 +2041,7 @@
           p.vx = p.vx * 0.20 + tx * 0.80;
           p.vy = p.vy * 0.20 + ty * 0.80;
           const ox = p.x, oy = p.y;
+          p._px = ox; p._py = oy;
           p.x += p.vx;
           p.y += p.vy;
           const dist = Math.hypot(p.x - ox, p.y - oy);

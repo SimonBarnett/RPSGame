@@ -593,7 +593,7 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     if want is None or _tname(p) != 'PAPER':
         return want
     best, best_d2 = None, 1e18
-    cap = (p.size * 14.0) ** 2
+    cap = (p.size * 22.0) ** 2
     sx = sy = 0.0
     n = 0
     for q in fear_pool or ():
@@ -648,7 +648,11 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
         return _clips_xy(h, cx, cy, reach, p.size * 0.5)
 
     def _into_scissors(h):
-        # Tight cone: heading AT a nearby Scissors, not a 60° all-pack flee.
+        # Body on the ray counts, not only a heading cone (cone missed side-rams).
+        reach = max(d_near, p.size * 12.0)
+        rad = p.size + float(getattr(best, 'size', None) or p.size)
+        if _clips_xy(h, best.x, best.y, reach, rad):
+            return True
         if d_near < p.size * 10.0 and abs(ang_diff(h, near_h)) < 0.70:
             return True
         if d_pack < p.size * 10.0 and abs(ang_diff(h, pack_h)) < 0.55:
@@ -656,16 +660,11 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
         return False
 
     def _not_into_scissors(h):
-        """If this heading points at Scissors and Rock is not on it, do not fly it."""
+        """Never fly a heading that rams Scissors. Rock-on-line is not a ram pass."""
         if not _into_scissors(h):
             return h
         if prey is not None:
             rh = heading_to(p.x, p.y, prey.x, prey.y)
-            pd_r = math.hypot(prey.x - p.x, prey.y - p.y)
-            # Rock is on this heading and pack is not: charge.
-            if abs(ang_diff(h, rh)) < 0.50:
-                if not (_clips(h, pd_r) or _clips_xy(h, best.x, best.y, pd_r, p.size)):
-                    return h
             if not _into_scissors(rh):
                 return rh
             sign = 1.0 if ang_diff(pack_h, rh) >= 0.0 else -1.0
@@ -690,10 +689,6 @@ def _paper_never_into_scissors(p, want, fear_pool, prey=None):
     beside = abs(ang_diff(hunt, pack_h)) > math.pi * 0.5
     on_line = _clips(hunt, pd) or _clips_xy(hunt, best.x, best.y, pd, p.size)
     if beside or not on_line or d_pack >= p.size * 4.0:
-        rh = heading_to(p.x, p.y, prey.x, prey.y)
-        # Charge intercept/direct hunt unless it points at Scissors with no Rock on it.
-        if (not _into_scissors(hunt)) or abs(ang_diff(hunt, rh)) < 0.50:
-            return hunt
         return _not_into_scissors(hunt)
     sign = 1.0 if ang_diff(pack_h, hunt) >= 0.0 else -1.0
     min_off = math.atan2(pack_r + p.size, max(d_pack, p.size))
@@ -1289,7 +1284,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     # Isolated Rock only when Scissors are far — else S never finishes last.
     if tn == 'PAPER' and fear_n > 0:
         fd = float(fear.get('d') or 1e9) if fear else 1e9
-        if fd < p.size * 36.0 or not prey or fd <= float(prey.get('d') or 0):
+        if fd < p.size * 44.0 or not prey or fd <= float(prey.get('d') or 0):
             prey = None
     _pfd = float(fear.get('d') or 1e9) if fear else 1e9
     _pdelay = tn == 'PAPER' and fear_n > 0 and prey is None
@@ -1474,7 +1469,7 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         hard = p.size * (6.0 if tn in ('PAPER', 'ROCK') else 4.5)
         soft = p.size * (8.0 if tn in ('PAPER', 'ROCK') else 6.5)
         paper_hunt = tn == 'PAPER' and prey and prey.get('obj') is not None
-        if fd < hard and not paper_hunt:
+        if fd < hard:
             want = flee
             mode = 'evade'
         elif fd < soft and (fd < pd or in_path) and not paper_hunt:
@@ -1498,11 +1493,9 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
         steered = _fear_clump_steer(p, world.particles, prey_t, want)
         if steered is not None:
             sh, close = steered
-            paper_hunt = tn == 'PAPER' and prey and prey.get('obj') is not None
-            if not (close and paper_hunt):
-                want = sh
-                if close:
-                    mode = 'evade'
+            want = sh
+            if close:
+                mode = 'evade'
     we2 = wall_escape(p, W, H, pad)
     if we2:
         want = blend_headings(want, we2['h'], we2['w'])
@@ -1520,9 +1513,11 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
             near_n += 1
     if near_n >= 3:
         want = blend_headings(want, desync_heading(p, prey['obj'] if prey else None), 0.3)
-    if mode == 'evade' and fear and fear['d'] < p.size * 6:
+    if fear and fear.get('obj') is not None:
         ahead = abs(ang_diff(p.angle, heading_to(p.x, p.y, fear['obj'].x, fear['obj'].y)))
-        if ahead < 0.6:
+        if tn == 'PAPER' and ahead < 0.85 and fear['d'] < p.size * 12:
+            p.speed *= 0.50
+        elif mode == 'evade' and fear['d'] < p.size * 6 and ahead < 0.6:
             p.speed *= 0.72
     for f in forts or ():
         if _fort_scale(f) < 0.85:
@@ -1540,15 +1535,10 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
     prey_obj = prey['obj'] if prey and prey.get('obj') is not None else None
     want = _avoid_fear_overlap(p, want, fear_pool)
     want = _paper_never_into_scissors(p, want, fear_pool, prey_obj)
-    # Paper: 8× keep-out while kiting; last-meter (4×) even while charging.
+    # Paper: never close on Scissors. Charging a Rock does not punch through.
     if tn == 'PAPER' and fear and fear.get('obj') is not None:
         fd = float(fear.get('d') or 1e9)
-        charging = False
-        if prey_obj is not None and want is not None:
-            rh = heading_to(p.x, p.y, prey_obj.x, prey_obj.y)
-            if abs(ang_diff(want, rh)) < 0.50:
-                charging = True
-        want = _no_close_on(p, want, fear['obj'], fd, 4.0 if charging else 8.0)
+        want = _no_close_on(p, want, fear['obj'], fd, 12.0)
     # No isolated Rock: flee. Cornered Scissors: leave the pocket. No orbit.
     if _pdelay:
         # Flee Scissors. Do not keep a closing heading (blend-with-current flew into them).
@@ -1636,12 +1626,46 @@ def _unstick_friends(particles):
                 q.y -= ny * push
 
 
+def _pair_graze(a, b):
+    """Current overlap or swept closest approach this step. Visual glow is ~1.15x size."""
+    min_d = float(getattr(a, 'size', 18) or 18) + float(getattr(b, 'size', 18) or 18)
+    extra = max(2.0, 0.30 * min_d)
+    dx, dy = b.x - a.x, b.y - a.y
+    dist = math.hypot(dx, dy)
+    if dist < min_d + extra:
+        return True, dist, dx, dy, min_d
+    ax0 = float(getattr(a, '_px', a.x))
+    ay0 = float(getattr(a, '_py', a.y))
+    bx0 = float(getattr(b, '_px', b.x))
+    by0 = float(getattr(b, '_py', b.y))
+    r0x, r0y = bx0 - ax0, by0 - ay0
+    rex = (b.x - bx0) - (a.x - ax0)
+    rey = (b.y - by0) - (a.y - ay0)
+    denom = rex * rex + rey * rey
+    t = 0.0
+    if denom > 1e-12:
+        t = -(r0x * rex + r0y * rey) / denom
+        if t < 0.0:
+            t = 0.0
+        elif t > 1.0:
+            t = 1.0
+    cx, cy = r0x + t * rex, r0y + t * rey
+    closest = math.hypot(cx, cy)
+    if closest < min_d + extra:
+        if dist >= 1e-8:
+            return True, dist, dx, dy, min_d
+        return True, max(closest, 1e-8), cx, cy, min_d
+    return False, dist, dx, dy, min_d
+
+
 def collide(world, allow_convert=True):
     particles = world.particles
-    types_alive = len({_tname(p) for p in particles})
-    # One convert per predator per tick: touch converts, pile is not wiped in one frame.
+    # One convert per predator per tick is not a skip: touch/graze/sweep converts.
+    # Facing and eat_cd never skip. Live type names, not a stale _tn cache.
     eat_cd = 1
     for p in particles:
+        t = getattr(p, 'type', None)
+        p._tn = t.name if hasattr(t, 'name') else str(t)
         cd = int(getattr(p, '_eat_cd', 0) or 0)
         if cd > 0:
             p._eat_cd = cd - 1
@@ -1652,16 +1676,17 @@ def collide(world, allow_convert=True):
         a = particles[i]
         for j in range(i + 1, len(particles)):
             b = particles[j]
-            dx, dy = b.x - a.x, b.y - a.y
-            dist = math.hypot(dx, dy)
-            min_d = a.size + b.size
+            hit, dist, dx, dy, min_d = _pair_graze(a, b)
+            if not hit:
+                continue
             if dist < 1e-8:
-                continue
-            graze = dist < min_d + max(1.5, 0.20 * min_d)
-            if not graze:
-                continue
+                dist = 1e-8
+                if abs(dx) + abs(dy) < 1e-8:
+                    dx, dy = 1.0, 0.0
             nx, ny = dx / dist, dy / dist
-            same = a.type == b.type
+            an = getattr(a, '_tn', None) or _tname(a)
+            bn = getattr(b, '_tn', None) or _tname(b)
+            same = an == bn
             if dist < min_d:
                 push = (min_d - dist + SEPARATION_SLOP) * (1.15 if same else 0.55)
                 a.x -= nx * push
@@ -1670,7 +1695,6 @@ def collide(world, allow_convert=True):
                 b.y += ny * push
             if same:
                 continue
-            an, bn = _tname(a), _tname(b)
             a_eats = PREY_N.get(an) == bn
             b_eats = PREY_N.get(bn) == an
             if not a_eats and not b_eats:
@@ -1679,18 +1703,17 @@ def collide(world, allow_convert=True):
             if not allow_convert:
                 continue
             winner_p = a if a_eats else b
-            # Struck by a predator converts on contact. Facing / eat_cd do not skip.
             loser = b if a_eats else a
             lose_was = loser.type
+            winner_n = getattr(winner_p, '_tn', None) or _tname(winner_p)
             loser.type = winner_p.type
-            loser._tn = _tname(winner_p)
+            loser._tn = winner_n
             loser._fresh_convert = 120
             winner_p._eat_cd = eat_cd
             W = float(getattr(world, 'width', 800) or 800)
             H = float(getattr(world, 'height', 600) or 600)
             world_k = min(W, H) / 800.0
-            wn = _tname(winner_p)
-            mot = DEFAULT_MOTION.get(wn) or {'speed': 1.3}
+            mot = DEFAULT_MOTION.get(winner_n) or {'speed': 1.3}
             keep = float(mot['speed']) * CRUISE_MULT * world_k * COLLISION_SPEED_KEEP
             for body in (a, b):
                 body.speed = keep
@@ -1809,6 +1832,7 @@ def step(world, move=True, keep_alive=False):
             p.vx = p.vx * 0.20 + tx * 0.80
             p.vy = p.vy * 0.20 + ty * 0.80
             ox, oy = p.x, p.y
+            p._px, p._py = ox, oy
             p.x += p.vx
             p.y += p.vy
             dist = math.hypot(p.x - ox, p.y - oy)
