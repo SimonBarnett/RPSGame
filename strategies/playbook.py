@@ -12,6 +12,7 @@ import os
 import copy
 import math
 import random
+import time
 EXPLORE_TYPES = set()
 _MAP_CELLS = None
 _MAP_MTIME = 0.0
@@ -62,11 +63,23 @@ _BOOK_CACHE = {}
 
 
 def _read_json(path, default=None):
-    try:
-        with open(path, encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return default
+    """NAS errno 22/59 must not look like a missing file (that seed-wipes / drops cards)."""
+    for _ in range(4):
+        try:
+            with open(path, encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return default
+        except OSError as e:
+            errno = getattr(e, 'errno', None)
+            winerr = getattr(e, 'winerror', None)
+            if errno in (22, 59) or winerr in (59, 64, 183):
+                time.sleep(0.12)
+                continue
+            return default
+        except Exception:
+            return default
+    return default
 
 
 def _shrink_ab(slot, cap=24.0):
