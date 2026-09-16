@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 150, gen: 2081, games: 16086, at: "2026-09-16 09:58Z", sha: "acc2c00" };
+  const BUILD = { n: 151, gen: 2091, games: 16122, at: "2026-09-16 10:32Z", sha: "15310fe" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1454,7 +1454,7 @@
       // Isolated Rock only when Scissors are far — else S never finishes last.
       if (p.type === 'PAPER' && fearN > 0) {
         const fd = fear ? fear.d : 1e9;
-        if (fd < p.size * 28 || !prey || fd <= prey.d) prey = null;
+        if (fd < p.size * 32 || !prey || fd <= prey.d) prey = null;
       }
       const pFd = fear ? fear.d : 1e9;
       const pDelay = p.type === 'PAPER' && fearN > 0 && !prey;
