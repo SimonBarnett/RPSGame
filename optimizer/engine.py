@@ -127,28 +127,67 @@ class StrategyOptimizer:
         return log_path(filename)
 
     def _tail_csv_lines(self, path, window, byte_window=250000):
-        """Header + last `window` rows without reading the whole NAS file."""
+        """Header + last `window` rows. Incremental NAS read after the first tail."""
         import os
         if not path or not os.path.exists(path):
             return [], []
+        window = int(window)
+        cache = getattr(self, '_csv_tail_cache', None)
+        if cache is None:
+            self._csv_tail_cache = {}
+            cache = self._csv_tail_cache
+        bag = cache.get(path) or {}
+        headers = list(bag.get('headers') or [])
+        lines = list(bag.get('lines') or [])
+        # getsize on a flaky NAS is the 8–23s stall — reuse RAM 7/8 passes.
+        skip = getattr(self, '_csv_skip', None)
+        if skip is None:
+            self._csv_skip = {}
+            skip = self._csv_skip
+        nskip = int(skip.get(path, 0) or 0)
+        if lines and headers and nskip < 8:
+            skip[path] = nskip + 1
+            return headers, lines[-window:]
+        skip[path] = 0
+        try:
+            size = os.path.getsize(path)
+        except Exception:
+            return headers, lines[-window:]
+        old = int(bag.get('size') or 0)
+        if old == size and lines:
+            return headers, lines[-window:]
         try:
             with open(path, 'rb') as f:
-                header_line = f.readline().decode('utf-8', 'ignore').strip()
-                f.seek(0, 2)
-                size = f.tell()
-                f.seek(max(0, size - int(byte_window)), 0)
-                raw = f.read().decode('utf-8', 'ignore')
+                if old and size > old and lines and headers:
+                    start = max(0, old - 2)
+                    f.seek(start)
+                    raw = f.read().decode('utf-8', 'ignore').replace('\r\n', '\n')
+                    if start > 0:
+                        nl = raw.find('\n')
+                        if nl >= 0:
+                            raw = raw[nl + 1:]
+                    extra = [ln for ln in raw.split('\n') if ln]
+                    if extra and extra[0].split(',')[0] == headers[0]:
+                        extra = extra[1:]
+                    lines.extend(extra)
+                else:
+                    header_line = f.readline().decode('utf-8', 'ignore').strip()
+                    headers = [h.strip() for h in header_line.split(',') if h.strip()]
+                    f.seek(0, 2)
+                    size = f.tell()
+                    f.seek(max(0, size - int(byte_window)), 0)
+                    raw = f.read().decode('utf-8', 'ignore').replace('\r\n', '\n').strip()
+                    lines = [ln for ln in raw.split('\n') if ln]
+                    if lines and headers:
+                        lines = lines[1:]
         except Exception:
+            if lines:
+                return headers, lines[-window:]
             return [], []
-        headers = [h.strip() for h in header_line.split(',') if h.strip()]
-        lines = raw.strip().split('\n')
-        if not lines:
-            return headers, []
-        if headers and lines[0].split(',')[0] != headers[0]:
-            lines = lines[1:]
-        elif headers and lines[0].split(',')[0] == headers[0]:
-            lines = lines[1:]
-        return headers, lines[-int(window):]
+        keep = max(window, 200)
+        lines = lines[-keep:]
+        cache[path] = {'size': size, 'headers': headers, 'lines': lines}
+        return headers, lines[-window:]
 
     def _load_games(self):
         path = self._metrics_path(StrategyOptimizer.GAMES_CSV)
@@ -505,21 +544,12 @@ class StrategyOptimizer:
         window = limit or max(50, self.SAMPLE_WINDOW * 15)
         if os.path.exists(path):
             try:
-                with open(path, 'rb') as f:
-                    header_line = f.readline().decode('utf-8', 'ignore').strip()
-                    f.seek(0, 2)
-                    size = f.tell()
-                    f.seek(max(0, size - 700000), 0)
-                    raw = f.read().decode('utf-8', 'ignore')
-                headers = [h.strip() for h in header_line.split(',') if h.strip()]
-                lines = raw.strip().split('\n')
-                if lines and headers and lines[0].split(',')[0] != headers[0]:
-                    lines = lines[1:]
-                for line in lines[-window:]:
+                headers, lines = self._tail_csv_lines(path, window, byte_window=700000)
+                for line in lines:
                     parts = line.split(',')
                     if len(parts) < 6:
                         continue
-                    rows.append(dict(zip(headers, parts)))
+                    rows.append(dict(zip(headers, parts)) if headers else {})
             except Exception as e:
                 self._log_raw(f'payoff: conversions read failed: {e}')
         metrics = getattr(getattr(self, 'w', None), 'metrics', None)
@@ -3747,7 +3777,8 @@ class StrategyOptimizer:
         explore = set(getattr(playbook, 'EXPLORE_TYPES', None) or ())
         done = set()
         skips = []
-        max_per = int(getattr(self, 'BO_MAX_PER_TYPE', 2))
+        max_per = int(getattr(self, 'BO_MAX_PER_TYPE', 1))
+        max_total = int(getattr(self, 'BO_MAX_TOTAL', 2))
         dead = self._load_gp_dead()
         dead_dirty = False
         gen = int(getattr(self, 'GENERATION', 0) or 0)
@@ -3766,6 +3797,8 @@ class StrategyOptimizer:
             return False
 
         for tname in ('ROCK', 'PAPER', 'SCISSORS'):
+            if len(done) >= max_total:
+                break
             bag = playbook.TEAM_OVERLAYS.get(tname) or {}
             used = ticks_all.get(tname) or {}
             played, rescue = [], []
@@ -3843,6 +3876,8 @@ class StrategyOptimizer:
                     if len(picked) >= max_per:
                         break
             for sid, ov in picked[:max_per]:
+                if len(done) >= max_total:
+                    break
                 tun = playbook.tunables_for(tname, sid)
                 if sid in self._CARE_SIDS:
                     hunt = set(self._HUNT_KNOBS)
@@ -3892,7 +3927,7 @@ class StrategyOptimizer:
             return ''
         s = s.split('  (', 1)[0].strip()
         if s.endswith(' match'):
-            s = s[:-6].strip()
+            return ''  # overlay nudge; do not mint a generation
         if ' GP-EI ' in s:
             s = s.split(' GP-EI ', 1)[0].strip()
         elif ' -> ' in s:
@@ -4072,7 +4107,8 @@ class StrategyOptimizer:
             self._log_buf = []
             buf = self._log_buf
         buf.append(line)
-        if len(buf) >= 24:
+        # One NAS append at end of optimise; mid-pass flushes were 11–23s stalls.
+        if len(buf) >= 200:
             self._flush_log()
 
     def _flush_log(self):
