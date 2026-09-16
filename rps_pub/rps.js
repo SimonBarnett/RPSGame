@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 144, gen: 2045, games: 15923, at: "2026-09-16 06:07Z", sha: "8f62352" };
+  const BUILD = { n: 146, gen: 2052, games: 15972, at: "2026-09-16 08:08Z", sha: "eb29251" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1451,9 +1451,13 @@
         prey = nearest(p, preyT);
       }
       // Paper: do not feast while any Scissors live (feeding Scissors is a fail).
-      if (p.type === 'PAPER' && fearN > 0) prey = null;
+      // Isolated Rock only when Scissors are far — else S never finishes last.
+      if (p.type === 'PAPER' && fearN > 0) {
+        const fd = fear ? fear.d : 1e9;
+        if (fd < p.size * 16 || !prey || fd <= prey.d) prey = null;
+      }
       const pFd = fear ? fear.d : 1e9;
-      const pDelay = p.type === 'PAPER' && fearN > 0;
+      const pDelay = p.type === 'PAPER' && fearN > 0 && !prey;
       if (fear && fearN > 0) {
         const near = 5 * p.size, far = 30 * p.size;
         let df = fear.d < near ? 1 : Math.max(0, 1 - (fear.d - near) / Math.max(1, far - near));
