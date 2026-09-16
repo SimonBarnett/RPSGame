@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 139, gen: 2028, games: 15764, at: "2026-09-16 00:22Z", sha: "6ca538e" };
+  const BUILD = { n: 140, gen: 2031, games: 15799, at: "2026-09-16 01:35Z", sha: "40bd939" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1781,7 +1781,7 @@
           const winnerP = aEats ? a : b;
           const loser = aEats ? b : a;
           loser.type = winnerP.type;
-          loser._fresh_convert = 90;
+          loser._fresh_convert = 120;
           winnerP._eat_cd = eatCd;
           const keep = (motion[winnerP.type] || DEFAULT_MOTION[winnerP.type]).speed * CRUISE_MULT * worldK * COLLISION_SPEED_KEEP;
           a.speed = keep; b.speed = keep;
