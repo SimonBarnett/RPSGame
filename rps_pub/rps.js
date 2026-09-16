@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 142, gen: 2039, games: 15880, at: "2026-09-16 04:36Z", sha: "577cad2" };
+  const BUILD = { n: 144, gen: 2045, games: 15923, at: "2026-09-16 06:07Z", sha: "8f62352" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1726,6 +1726,12 @@
             want = safeH;
             mode = 'bias';
           }
+          p._locked = null;
+        } else if (fearN > 0 && mode === 'chase') {
+          // After the 120-frame window: while Paper lives, do not chord-cut
+          // leftover Scissors. Contact/graze still converts. 16x fresh unchanged.
+          want = sectorH;
+          mode = 'bias';
           p._locked = null;
         }
       }

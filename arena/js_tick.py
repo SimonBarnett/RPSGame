@@ -1588,6 +1588,12 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
                 want = safe_h
                 mode = 'bias'
             p._locked = None
+        # After the 120-frame window: while Paper lives, do not chord-cut
+        # leftover Scissors. Contact/graze still converts. 16x fresh unchanged.
+        elif fear_n > 0 and mode == 'chase':
+            want = sector_h
+            mode = 'bias'
+            p._locked = None
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
