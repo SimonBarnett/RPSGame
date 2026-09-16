@@ -4,7 +4,7 @@
  */
 (function (global) {
   'use strict';
-  const BUILD = { n: 157, gen: 2139, games: 16292, at: "2026-09-16 13:18Z", sha: "be4e5f9" };
+  const BUILD = { n: 158, gen: 2169, games: 16464, at: "2026-09-16 16:03Z", sha: "ae70ed5" };
   /**
    * rps.js — live-play port of the Python Rock / Paper / Scissors arena.
    * Learning, metrics CSV, and the optimiser stay in Python.
@@ -1725,11 +1725,14 @@
           }
           p._locked = null;
         } else if (fearN > 0 && mode === 'chase') {
-          // After the 120-frame window: while Paper lives, do not chord-cut
-          // leftover Scissors. Contact/graze still converts. 16x fresh unchanged.
-          want = sectorH;
-          mode = 'bias';
-          p._locked = null;
+          // After the 120-frame window: drop chase only if Paper is inside 20×.
+          // Isolated leftover Scissors (Paper ≥20×) may be hunted. 16× fresh unchanged.
+          const pfd = fear ? fear.d : 1e9;
+          if (pfd < p.size * 20) {
+            want = sectorH;
+            mode = 'bias';
+            p._locked = null;
+          }
         }
       }
       if (want != null) {

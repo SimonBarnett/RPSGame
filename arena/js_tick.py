@@ -1581,12 +1581,14 @@ def think(world, p, counts, W, H, pad, world_k, forts, by_type=None):
                 want = safe_h
                 mode = 'bias'
             p._locked = None
-        # After the 120-frame window: while Paper lives, do not chord-cut
-        # leftover Scissors. Contact/graze still converts. 16x fresh unchanged.
+        # After the 120-frame window: drop chase only if Paper is inside 20×.
+        # Isolated leftover Scissors (Paper ≥20×) may be hunted. 16× fresh unchanged.
         elif fear_n > 0 and mode == 'chase':
-            want = sector_h
-            mode = 'bias'
-            p._locked = None
+            pfd = float(fear.get('d') or 1e9) if fear else 1e9
+            if pfd < p.size * 20.0:
+                want = sector_h
+                mode = 'bias'
+                p._locked = None
     if want is not None:
         dlt = ang_diff(p.angle, want)
         p.angle = ang_norm(p.angle + max(-max_turn, min(max_turn, dlt)))
